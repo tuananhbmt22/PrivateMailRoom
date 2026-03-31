@@ -210,7 +210,7 @@ function renderEventLog(entries) {
         const statusIcon = isUndetermined ? '❓' : '✓';
         const time = entry.classified_at ? formatTime(entry.classified_at) : '';
         const confidence = entry.confidence != null ? entry.confidence.toFixed(2) : '—';
-        const subject = entry._subject || entry.event_id;
+        const subject = resolveDisplayTitle(entry);
 
         row.innerHTML = `
             <span class="event-status">${statusIcon}</span>
@@ -256,7 +256,7 @@ async function openFolderPanel(folderKey) {
 
                 const files = ev.files.filter(f => !f.startsWith('_')).join(', ');
                 const confidence = ev.receipt ? ev.receipt.confidence : null;
-                const subject = ev.subject || ev.event_id;
+                const subject = ev.receipt ? resolveDisplayTitle(ev.receipt) : (ev.subject || ev.event_id);
                 const sender = ev.sender || '';
                 const fileCount = ev.file_count || 0;
 
@@ -331,7 +331,7 @@ function showReceipt(receipt) {
         body.style.whiteSpace = 'pre-wrap';
     } else {
         // Staff mode: human-friendly card
-        const subject = receipt._subject || receipt.event_id || 'Document';
+        const subject = resolveDisplayTitle(receipt);
         const sender = receipt._sender || '';
         const outcome = receipt.outcome || 'Unknown';
         const confidence = receipt.confidence != null ? Math.round(receipt.confidence * 100) : 0;
@@ -460,6 +460,32 @@ function copyDraft() {
 function toggleDevMode() {
     devMode = document.getElementById('settingsDevMode').checked;
     localStorage.setItem('devMode', devMode);
+}
+
+/* ── Event Display Settings (per-staff, localStorage) ── */
+
+let eventDisplayMode = localStorage.getItem('eventDisplayMode') || 'raw';
+let redactPii = localStorage.getItem('redactPii') === 'true';
+
+function toggleEventDisplayMode() {
+    eventDisplayMode = document.getElementById('settingsEventDisplay').value;
+    localStorage.setItem('eventDisplayMode', eventDisplayMode);
+    const redactRow = document.getElementById('redactPiiRow');
+    if (redactRow) redactRow.style.display = eventDisplayMode === 'agent_title' ? '' : 'none';
+}
+
+function toggleRedactPii() {
+    redactPii = document.getElementById('settingsRedactPii').checked;
+    localStorage.setItem('redactPii', redactPii);
+}
+
+function resolveDisplayTitle(data) {
+    if (devMode) return data.event_id || '';
+    if (eventDisplayMode === 'agent_title') {
+        if (redactPii && data.display_title_redacted) return data.display_title_redacted;
+        if (data.display_title) return data.display_title;
+    }
+    return data._subject || data.event_id || '';
 }
 
 function setupModalClose() {
@@ -813,7 +839,11 @@ async function pollInbox() {
                 status.textContent = `✓ ${data.events_created} email(s) ingested`;
 
                 addPollLog(`✓ ${data.events_created} email(s) ingested`, 'success');
-                data.event_ids.forEach(id => addPollLog(`  → ${id}`, ''));
+                if (data.event_details && !devMode) {
+                    data.event_details.forEach(d => addPollLog(`  → ${d.subject || d.event_id}`, ''));
+                } else {
+                    data.event_ids.forEach(id => addPollLog(`  → ${id}`, ''));
+                }
                 setPollStatus('active', `Last: ${data.events_created} email(s) ingested`);
 
                 pulseReceiver();
@@ -881,13 +911,20 @@ async function classifyAll(skipPendingCheck) {
     setClassifyStatus('working', 'Processing...');
     setPipelineStatus('working', 'Running...');
 
+    // Refresh state to get fresh pending list with subjects
+    try {
+        currentState = await API.state();
+    } catch (e) {}
+
     // Get pending events from current state
     clearPipelineEvents();
     const pendingIds = [];
+    const pendingSubjects = {};
     if (currentState && currentState.pending) {
         currentState.pending.forEach(p => {
             pendingIds.push(p.event_id);
-            addPipelineEvent(p.event_id, 'matching');
+            pendingSubjects[p.event_id] = p._subject || '';
+            addPipelineEvent(p.event_id, 'matching', p._subject);
         });
     }
 
@@ -904,20 +941,49 @@ async function classifyAll(skipPendingCheck) {
         for (const eventId of pendingIds) {
             let skillMatched = null;
             let skillResult = null;
+            let eventTitles = {};
 
             // Call 1: Skill Match (if enabled)
             if (skillsEnabled) {
                 updatePipelineStage(eventId, 'matching', 'active');
                 try {
-                    const matchResp = await fetch(`/api/skill-match/${eventId}`, { method: 'POST' });
+                    const matchResp = await fetch(`/api/skill-match/${eventId}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ generate_title: eventDisplayMode === 'agent_title' }),
+                    });
                     const matchData = await matchResp.json();
                     const sid = matchData.skill_id;
                     const conf = matchData.confidence || 0;
 
+                    // Capture agent-generated titles from Call 1
+                    if (matchData.display_title) {
+                        eventTitles = {
+                            display_title: matchData.display_title,
+                            display_title_redacted: matchData.display_title_redacted || matchData.display_title,
+                        };
+                    }
+
+                    const titleLabel = resolveDisplayTitle({
+                        event_id: eventId,
+                        _subject: pendingSubjects[eventId],
+                        ...eventTitles,
+                    });
+
+                    // Immediately update pipeline card title after Call 1
+                    const pipeCard = document.getElementById(`pipeline-${eventId}`);
+                    if (pipeCard) {
+                        const pipeTitle = pipeCard.querySelector('.pipeline-event-title');
+                        if (pipeTitle && titleLabel !== eventId) {
+                            pipeTitle.textContent = titleLabel;
+                            pipeTitle.dataset.subject = titleLabel;
+                        }
+                    }
+
                     if (sid && sid !== 'none' && sid !== 'N/A' && conf >= 0.8) {
                         skillMatched = sid;
                         updatePipelineStage(eventId, 'matching', 'done', `✓ ${sid}`);
-                        addClassifyLog(`🎯 ${eventId}: matched skill "${sid}" (${conf.toFixed(2)})`, 'info');
+                        addClassifyLog(`🎯 ${titleLabel}: skill "${sid}" (${conf.toFixed(2)})`, 'info');
 
                         // Call 2: Scroll Execution
                         updatePipelineStage(eventId, 'scroll', 'active', `${sid}_scroll...`);
@@ -929,7 +995,8 @@ async function classifyAll(skipPendingCheck) {
                             });
                             skillResult = await scrollResp.json();
                             updatePipelineStage(eventId, 'scroll', 'done', `✓ ${sid}_scroll`);
-                            addClassifyLog(`📜 ${eventId}: ${skillResult.request_type || '?'} → ${skillResult.outcome || '?'}`, 'info');
+                            const scrollLabel = resolveDisplayTitle({ event_id: eventId, _subject: pendingSubjects[eventId], ...eventTitles });
+                            addClassifyLog(`📜 ${scrollLabel}: ${skillResult.request_type || '?'} → ${skillResult.outcome || '?'}`, 'info');
                         } catch (e) {
                             updatePipelineStage(eventId, 'scroll', 'done', '✗ error');
                         }
@@ -959,31 +1026,56 @@ async function classifyAll(skipPendingCheck) {
                 classData.skill_metadata = skillResult ? skillResult.metadata : null;
                 classData.skill_confidence = skillResult ? skillResult.confidence : null;
                 classData.skill_response_key = skillResult ? skillResult.response_template_key : null;
+                classData._subject = pendingSubjects[eventId] || classData._subject || eventId;
+                classData.display_title = eventTitles.display_title || '';
+                classData.display_title_redacted = eventTitles.display_title_redacted || '';
+
+                // Resolve the friendly label from all available sources
+                const friendlyLabel = resolveDisplayTitle(classData);
 
                 updatePipelineStage(eventId, 'classify', 'done');
                 updatePipelineStage(eventId, 'dispatch', 'done');
 
-                // Update pipeline title
+                // Update pipeline title with subject
                 const card = document.getElementById(`pipeline-${eventId}`);
                 if (card) {
                     const title = card.querySelector('.pipeline-event-title');
-                    if (title) title.innerHTML = `${escapeHtml(eventId)} → <span style="color:var(--green)">${escapeHtml(classData.outcome)}</span>`;
+                    if (title) {
+                        // Update stored subject for future use
+                        title.dataset.subject = friendlyLabel;
+                        title.innerHTML = `${escapeHtml(friendlyLabel)} <span class="pipeline-arrow">→</span> <span style="color:var(--green)">${escapeHtml(classData.outcome)}</span>`;
+                    }
                 }
                 pipelineResults[eventId] = classData;
 
                 if (classData.outcome === 'Undetermined') {
-                    addClassifyLog(`❓ ${eventId} → Undetermined`, 'error');
+                    addClassifyLog(`❓ ${friendlyLabel} → Undetermined`, 'error');
                     activateRoute('undetermined');
                 } else {
-                    addClassifyLog(`✓ ${eventId} → ${classData.outcome} (${classData.confidence})`, 'success');
+                    addClassifyLog(`✓ ${friendlyLabel} → ${classData.outcome} (${classData.confidence})`, 'success');
                     const folderKey = findFolderKeyByName(classData.outcome);
                     if (folderKey) activateRoute(folderKey);
                 }
 
                 allResults.push(classData);
+
+                // Persist agent titles into the classification receipt (fire-and-forget)
+                if (eventTitles.display_title && classData.moved) {
+                    const folderKey = findFolderKeyByName(classData.outcome);
+                    fetch(`/api/save-titles/${eventId}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            folder_key: folderKey || 'undetermined',
+                            display_title: eventTitles.display_title,
+                            display_title_redacted: eventTitles.display_title_redacted,
+                        }),
+                    }).catch(() => {});
+                }
             } catch (e) {
                 updatePipelineStage(eventId, 'classify', 'done');
-                addClassifyLog(`✗ ${eventId}: ${e.message}`, 'error');
+                const errLabel = resolveDisplayTitle({ event_id: eventId, _subject: pendingSubjects[eventId], ...eventTitles });
+                addClassifyLog(`✗ ${errLabel}: ${e.message}`, 'error');
             }
         }
 
@@ -1024,6 +1116,10 @@ async function loadSettings() {
         document.getElementById('settingsOnboardDate').value = data.since_date || '';
         document.getElementById('settingsDevMode').checked = devMode;
         document.getElementById('settingsSkillsToggle').checked = data.skills_enabled || false;
+        document.getElementById('settingsEventDisplay').value = eventDisplayMode;
+        document.getElementById('settingsRedactPii').checked = redactPii;
+        const redactRow = document.getElementById('redactPiiRow');
+        if (redactRow) redactRow.style.display = eventDisplayMode === 'agent_title' ? '' : 'none';
     } catch (err) {
         console.error('Failed to load settings:', err);
     }
@@ -1788,12 +1884,14 @@ function clearPipelineEvents() {
     pipelineResults = {};
 }
 
-function addPipelineEvent(eventId, initialStage) {
+function addPipelineEvent(eventId, initialStage, subject) {
     const container = document.getElementById('pipelineEvents');
     if (!container) return;
 
     const empty = container.querySelector('.activity-empty');
     if (empty) empty.remove();
+
+    const displayName = devMode ? eventId : (subject || eventId);
 
     const card = document.createElement('div');
     card.className = 'pipeline-event';
@@ -1801,7 +1899,7 @@ function addPipelineEvent(eventId, initialStage) {
     card.style.cursor = 'pointer';
     card.onclick = () => showPipelineDetail(eventId);
     card.innerHTML = `
-        <div class="pipeline-event-title">${escapeHtml(eventId)}</div>
+        <div class="pipeline-event-title" data-event-id="${escapeAttr(eventId)}" data-subject="${escapeAttr(subject || '')}">${escapeHtml(displayName)}</div>
         <div class="pipeline-stages">
             <span class="pipeline-stage active" data-stage="matching">
                 <span class="stage-spinner"></span>Skill Match
@@ -1849,7 +1947,9 @@ function completePipelineEvent(eventId, outcome, resultData) {
 
     const title = card.querySelector('.pipeline-event-title');
     if (title) {
-        title.innerHTML = `${escapeHtml(eventId)} → <span style="color:var(--green)">${escapeHtml(outcome)}</span>`;
+        const subject = title.dataset.subject;
+        const displayName = devMode ? eventId : (subject || eventId);
+        title.innerHTML = `${escapeHtml(displayName)} <span class="pipeline-arrow">→</span> <span style="color:var(--green)">${escapeHtml(outcome)}</span>`;
     }
 }
 
@@ -1881,7 +1981,8 @@ function showPipelineDetail(eventId) {
         body.textContent = JSON.stringify(data, null, 2);
         body.style.whiteSpace = 'pre-wrap';
     } else {
-        title.textContent = `Pipeline Summary — ${eventId}`;
+        const pipelineSubject = resolveDisplayTitle(data);
+        title.textContent = `Pipeline Summary — ${pipelineSubject}`;
 
         const skill = data.skill_matched;
         const reqType = data.skill_request_type;

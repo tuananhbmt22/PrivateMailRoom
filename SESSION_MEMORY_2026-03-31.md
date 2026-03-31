@@ -49,11 +49,22 @@ AI-powered document classification system for NSW local councils. Automates emai
 - Settings panel: onboard date, skills toggle, dev mode, layout templates
 
 ## Skills Pipeline (3-Call Chain)
-1. **Call 1 — Skill Match**: minimal prompt, 64 max_tokens, returns `{"skill_id":"parking","confidence":0.95}`
+1. **Call 1 — Skill Match + Title**: minimal prompt, 128 max_tokens, returns `{"skill_id":"parking","confidence":0.95,"display_title":"...","display_title_redacted":"..."}`
 2. **Call 2 — Scroll Execution**: loads `{skill}_scroll.json`, follows instructions, returns structured analysis
 3. **Call 3 — Classification**: standard classifier, enhanced with skill result if available
 - Each call is a separate API endpoint for progressive frontend updates
 - `use_json_schema=False` for calls 1+2, `True` for call 3
+- Call 1 now dual-purpose: skill matching + agent title generation with PII redaction
+
+## Event Display System (NEW)
+- **Settings:** per-staff via localStorage (not server-side)
+- **Modes:** `raw` (email subject / event ID) or `agent_title` (AI-generated 1-sentence summary)
+- **PII Redaction:** toggle to replace names/addresses/phones/refs with `[Name]`/`[Address]`/etc.
+- **Storage:** both `display_title` and `display_title_redacted` saved in `_classification.json`
+- **Generation:** bundled into Call 1 (skill match) — no extra LLM call
+- **Persistence:** `/api/save-titles/<event_id>` writes titles into receipt after dispatch
+- **Resolution:** `resolveDisplayTitle()` JS function checks devMode → eventDisplayMode → redactPii → fallback chain
+- **Files:** `engine/title_generator.py` (standalone generator, used by generate-title endpoint), `engine/skill_runner.py` (Call 1 prompt updated)
 
 ## Known Bugs / In Progress
 - Scroll execution can be slow (27B model, complex scroll) — timeout set to 300s
@@ -61,6 +72,7 @@ AI-powered document classification system for NSW local councils. Automates emai
 - Template save bar snapshot comparison needs testing after drag-back-to-original
 - Draft reply feature: scaffolded but needs rewiring to use skill results (not standalone)
 - Requeue: wizard modal approach works but had intermittent first-click issues (fixed with full step reset)
+- **BUG (unresolved):** Pipeline/Classification panels show raw event IDs instead of friendly subjects. Root cause: race condition between state refresh and classify dispatch — event leaves receive_channel before subject can be read. Multiple fix attempts (state pre-fetch, classify-single returning _subject) didn't reliably resolve. Replaced by Event Display Mode feature (agent-generated titles + PII redaction).
 
 ## Parked Features (Not Built Yet)
 - **Reply drafting**: `config/reply_prompt.md` exists, `draftReply()` JS function exists, needs to use `_skill_result.json` + scroll response templates

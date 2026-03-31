@@ -80,17 +80,20 @@ def scan_folder_counts(council_dir: Path, folder_map: dict[str, str]) -> dict[st
 
 
 def scan_receive_channel(council_dir: Path) -> list[dict[str, Any]]:
-    """List pending events in the receive channel."""
+    """List pending events in the receive channel with display metadata."""
     channel = council_dir / "receive_channel"
     events = []
     if channel.is_dir():
         for event_dir in sorted(channel.iterdir()):
             if event_dir.is_dir() and not event_dir.name.startswith("."):
                 files = [f.name for f in event_dir.iterdir() if f.is_file() and not f.name.startswith(".")]
+                display = extract_event_display(event_dir)
                 events.append({
                     "event_id": event_dir.name,
                     "file_count": len(files),
                     "files": files,
+                    "_subject": display["subject"],
+                    "_sender": display["sender"],
                 })
     return events
 
@@ -611,10 +614,19 @@ def register_routes(app: Flask) -> None:
                 events = ingester.poll_once()
                 ingester.disconnect()
 
+                event_details = []
+                for event_path in events:
+                    display = extract_event_display(event_path)
+                    event_details.append({
+                        "event_id": event_path.name,
+                        "subject": display["subject"],
+                    })
+
                 return jsonify({
                     "success": True,
                     "events_created": len(events),
                     "event_ids": [e.name for e in events],
+                    "event_details": event_details,
                 })
             except Exception as exc:
                 return jsonify({"success": False, "error": str(exc)}), 500
@@ -647,10 +659,21 @@ def register_routes(app: Flask) -> None:
 
                 client.close()
 
+                event_details = []
+                for eid in created_events:
+                    event_dir = receive_channel / eid
+                    if event_dir.is_dir():
+                        display = extract_event_display(event_dir)
+                        event_details.append({
+                            "event_id": eid,
+                            "subject": display["subject"],
+                        })
+
                 return jsonify({
                     "success": True,
                     "events_created": len(created_events),
                     "event_ids": created_events,
+                    "event_details": event_details,
                 })
             except Exception as exc:
                 client.close()
@@ -1353,7 +1376,7 @@ def register_routes(app: Flask) -> None:
 
     @app.route("/api/skill-match/<event_id>", methods=["POST"])
     def api_skill_match(event_id: str):
-        """Call 1: Match event against skills list."""
+        """Call 1: Match event against skills list, optionally generate title."""
         from engine.skill_runner import load_skills_list, call1_match_skill
         from engine.classifier import read_event, build_user_message
         from engine.llm import LLMConfig, LocalLLM
@@ -1362,6 +1385,10 @@ def register_routes(app: Flask) -> None:
         event_dir = council_dir / "receive_channel" / event_id
         if not event_dir.is_dir():
             return jsonify({"error": "Event not found"}), 404
+
+        # Check if frontend wants title generation
+        data = request.get_json(silent=True) or {}
+        generate_title = data.get("generate_title", False)
 
         skills_dir = BASE_DIR / "skills"
         skills_list = load_skills_list(skills_dir)
@@ -1373,7 +1400,7 @@ def register_routes(app: Flask) -> None:
 
         llm_config = LLMConfig.from_yaml(CONFIG_DIR / "llm.yaml")
         llm = LocalLLM(llm_config)
-        result = call1_match_skill(llm, skills_list, event_text)
+        result = call1_match_skill(llm, skills_list, event_text, generate_title=generate_title)
         llm.close()
 
         return jsonify(result)
@@ -1424,6 +1451,9 @@ def register_routes(app: Flask) -> None:
         if not event_dir.is_dir():
             return jsonify({"error": "Event not found"}), 404
 
+        # Extract display info before dispatch moves the event
+        display = extract_event_display(event_dir)
+
         folder_tree_path = CONFIG_DIR / "classification_only_tree.json"
         engine = ClassificationEngine(
             llm_config_path=CONFIG_DIR / "llm.yaml",
@@ -1448,4 +1478,109 @@ def register_routes(app: Flask) -> None:
             "confidence": round(classification.confidence, 2),
             "reasoning": classification.reasoning,
             "moved": dispatch_result.moved if dispatch_result else False,
+            "_subject": display["subject"],
+            "_sender": display["sender"],
         })
+
+    @app.route("/api/generate-title/<event_id>", methods=["POST"])
+    def api_generate_title(event_id: str):
+        """Call 4: Generate a display title + redacted version for an event.
+
+        Reads the classification receipt to get context, then asks the LLM
+        for a short human-friendly title. Saves both versions into the receipt.
+        Works on events in any folder (post-dispatch).
+        """
+        from engine.title_generator import generate_event_title
+        from engine.llm import LLMConfig, LocalLLM
+
+        data = request.get_json() or {}
+        subject = data.get("subject", "")
+        outcome = data.get("outcome", "")
+        skill_outcome = data.get("skill_outcome")
+        reasoning = data.get("reasoning")
+        folder_key = data.get("folder_key")
+
+        if not subject or not outcome:
+            return jsonify({"error": "subject and outcome required"}), 400
+
+        llm_config = LLMConfig.from_yaml(CONFIG_DIR / "llm.yaml")
+        llm = LocalLLM(llm_config)
+
+        titles = generate_event_title(
+            llm=llm,
+            subject=subject,
+            outcome=outcome,
+            skill_outcome=skill_outcome,
+            reasoning=reasoning,
+        )
+        llm.close()
+
+        # Save titles into the classification receipt if we can find the event
+        council_dir = app.config["COUNCIL_DIR"]
+        folder_map = app.config["COUNCIL_CONFIG"]["folder_map"]
+
+        receipt_updated = False
+        if folder_key:
+            relative_path = folder_map.get(folder_key)
+            if relative_path:
+                event_dir = council_dir / relative_path / event_id
+                receipt_path = event_dir / "_classification.json"
+                if receipt_path.is_file():
+                    try:
+                        receipt = json.loads(receipt_path.read_text())
+                        receipt["display_title"] = titles["title"]
+                        receipt["display_title_redacted"] = titles["title_redacted"]
+                        receipt_path.write_text(json.dumps(receipt, indent=2))
+                        receipt_updated = True
+                    except (json.JSONDecodeError, OSError) as exc:
+                        logger.warning("Failed to update receipt for %s: %s", event_id, exc)
+
+        return jsonify({
+            "event_id": event_id,
+            "display_title": titles["title"],
+            "display_title_redacted": titles["title_redacted"],
+            "receipt_updated": receipt_updated,
+        })
+
+    @app.route("/api/save-titles/<event_id>", methods=["POST"])
+    def api_save_titles(event_id: str):
+        """Persist agent-generated titles into a classification receipt."""
+        council_dir = app.config["COUNCIL_DIR"]
+        folder_map = app.config["COUNCIL_CONFIG"]["folder_map"]
+
+        data = request.get_json() or {}
+        folder_key = data.get("folder_key")
+        display_title = data.get("display_title", "")
+        display_title_redacted = data.get("display_title_redacted", "")
+
+        if not folder_key or not display_title:
+            return jsonify({"success": False}), 400
+
+        relative_path = folder_map.get(folder_key)
+        if not relative_path:
+            return jsonify({"success": False, "error": "Unknown folder"}), 404
+
+        # Search for the event in the folder (name may have timestamp suffix from collision)
+        folder_dir = council_dir / relative_path
+        event_dir = None
+        if folder_dir.is_dir():
+            for candidate in folder_dir.iterdir():
+                if candidate.is_dir() and candidate.name.startswith(event_id):
+                    event_dir = candidate
+                    break
+
+        if not event_dir:
+            return jsonify({"success": False, "error": "Event not found"}), 404
+
+        receipt_path = event_dir / "_classification.json"
+        if not receipt_path.is_file():
+            return jsonify({"success": False, "error": "No receipt"}), 404
+
+        try:
+            receipt = json.loads(receipt_path.read_text())
+            receipt["display_title"] = display_title
+            receipt["display_title_redacted"] = display_title_redacted
+            receipt_path.write_text(json.dumps(receipt, indent=2))
+            return jsonify({"success": True})
+        except (json.JSONDecodeError, OSError) as exc:
+            return jsonify({"success": False, "error": str(exc)}), 500

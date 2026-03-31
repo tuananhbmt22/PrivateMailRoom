@@ -19,7 +19,18 @@ from .llm import LLMConfig, LocalLLM
 
 logger = logging.getLogger(__name__)
 
-SKILL_MATCH_PROMPT = """Match the event to one skill from the list. Return ONLY: {"skill_id":"<id>","confidence":<0.0-1.0>} or {"skill_id":"N/A","confidence":0.0} if no match. No reasoning. No extra text."""
+SKILL_MATCH_PROMPT = """Match the event to one skill from the list. Return ONLY valid JSON with no extra text.
+
+Return ONLY:
+{"skill_id":"<id or N/A>","confidence":<0.0-1.0>}"""
+
+SKILL_MATCH_WITH_TITLE_PROMPT = """You have two jobs. Return ONLY valid JSON with no extra text.
+
+Job 1 — Skill Match: Compare the event to the skills list. Find the best match.
+Job 2 — Event Title: Write a short 1-sentence title (max 12 words) describing the event. Also write a redacted version replacing personal names with [Name], addresses with [Address], phone numbers with [Phone], emails with [Email], registration/permit/account numbers with [Ref], pet names with [Pet]. Do NOT redact department names, council names, or document types.
+
+Return ONLY:
+{"skill_id":"<id or N/A>","confidence":<0.0-1.0>,"display_title":"<title>","display_title_redacted":"<redacted title>"}"""
 
 SCROLL_EXECUTE_PROMPT = """Execute the scroll instructions on this event. Follow the scroll's request types, checks, and outcomes precisely.
 
@@ -61,14 +72,29 @@ def call1_match_skill(
     llm: LocalLLM,
     skills_list: str,
     event_text: str,
+    generate_title: bool = False,
 ) -> dict[str, Any]:
-    """Call 1: Match event against skills list.
+    """Call 1: Match event against skills list, optionally generate display title.
 
-    Returns: { skill_id, confidence, reasoning }
+    Args:
+        llm: Local LLM instance.
+        skills_list: Contents of skills.md.
+        event_text: Formatted event text.
+        generate_title: If True, use the prompt that also generates display titles.
+
+    Returns:
+        Dict with skill_id, confidence, and optionally display_title/display_title_redacted.
     """
     user_message = f"## SKILLS LIST:\n{skills_list}\n\n## EVENT:\n{event_text}"
 
-    response = llm.infer(SKILL_MATCH_PROMPT, user_message, use_json_schema=False, max_tokens_override=64)
+    if generate_title:
+        prompt = SKILL_MATCH_WITH_TITLE_PROMPT
+        max_tokens = 128
+    else:
+        prompt = SKILL_MATCH_PROMPT
+        max_tokens = 64
+
+    response = llm.infer(prompt, user_message, use_json_schema=False, max_tokens_override=max_tokens)
 
     if not response.success:
         return {"skill_id": "none", "confidence": 0.0, "reasoning": f"Match failed: {response.error}"}
