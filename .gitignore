@@ -30,3 +30,6 @@ config/oauth.yaml
 _processed_uids.json
 _training_log.jsonl
 _history.json
+
+# Kiro (local only)
+.kiro/
