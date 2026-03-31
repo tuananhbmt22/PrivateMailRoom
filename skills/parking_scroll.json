@@ -1,0 +1,104 @@
+{
+  "skill_id": "parking",
+  "skill_name": "Parking & Traffic",
+  "version": "1.0",
+  "department_key": "regulation_of_parking",
+  "description": "Handles parking fines, appeals, permits, and enforcement",
+
+  "matching": {
+    "keywords": ["parking", "fine", "infringement", "clearway", "permit", "parked", "no stopping", "ranger"],
+    "concepts": ["vehicle violation", "parking appeal", "parking permit", "traffic enforcement"]
+  },
+
+  "request_types": {
+    "appeal": {
+      "description": "Sender is disputing a parking fine or infringement notice",
+      "checks": [
+        "Is a fine or infringement number referenced?",
+        "Is evidence provided (photos, witness statements)?",
+        "What grounds are cited? (signage obscured, medical emergency, permit displayed, wrong vehicle, time dispute)",
+        "Does the evidence support the claimed grounds?"
+      ],
+      "outcomes": {
+        "valid_appeal": "Evidence supports the appeal, grounds are legitimate",
+        "needs_evidence": "Appeal filed but missing required evidence or fine number",
+        "needs_review": "Complex case requiring human review (conflicting evidence, edge case)",
+        "rejected": "No valid grounds for appeal based on information provided"
+      }
+    },
+    "payment": {
+      "description": "Sender wants to pay a fine or asks about payment options",
+      "checks": [
+        "Is a fine number referenced?",
+        "Is the sender asking about payment plans or hardship?"
+      ],
+      "outcomes": {
+        "payment_info": "Provide standard payment instructions",
+        "hardship": "Sender mentions financial difficulty, provide payment plan info"
+      }
+    },
+    "report": {
+      "description": "Sender is reporting illegal parking by someone else",
+      "checks": [
+        "Is a specific location provided?",
+        "Is the issue ongoing or a one-time incident?",
+        "Is there a safety concern (blocking driveway, school zone)?"
+      ],
+      "outcomes": {
+        "ranger_dispatch": "Clear location provided, ranger can investigate",
+        "safety_urgent": "Safety concern identified, priority dispatch",
+        "noted": "Report logged but insufficient detail for immediate action"
+      }
+    },
+    "permit": {
+      "description": "Sender is applying for or renewing a parking permit",
+      "checks": [
+        "Is a residential address provided?",
+        "Is this a new application or renewal?",
+        "Are required documents mentioned (proof of residency, rego)?"
+      ],
+      "outcomes": {
+        "permit_application": "New permit application with sufficient details",
+        "permit_renewal": "Renewal request",
+        "permit_incomplete": "Missing required information for permit processing"
+      }
+    },
+    "enquiry": {
+      "description": "General question about parking rules, zones, or restrictions",
+      "checks": [
+        "What specific area or zone is being asked about?",
+        "Is this about time restrictions, permit zones, or clearway hours?"
+      ],
+      "outcomes": {
+        "general_info": "Provide relevant parking information"
+      }
+    }
+  },
+
+  "metadata_fields": {
+    "plate_number": "Vehicle registration plate (e.g., ABC123)",
+    "fine_number": "Infringement notice number",
+    "violation_type": "Type: clearway, no_stopping, expired_meter, no_permit, school_zone, other",
+    "violation_date": "Date of the alleged violation",
+    "location": "Street address or intersection",
+    "request_type": "Determined request type from analysis",
+    "has_evidence": "Whether evidence was provided (true/false)",
+    "appeal_grounds": "Stated reason for appeal if applicable"
+  },
+
+  "response_templates": {
+    "valid_appeal": "Thank you for your correspondence regarding infringement notice {fine_number}. We have reviewed the evidence you provided regarding the {violation_type} at {location} on {violation_date}. Based on the information submitted, your appeal has been forwarded to our Parking Review Panel for assessment. You will receive a written determination within 21 business days. During this period, enforcement action on this notice is suspended.",
+    "needs_evidence": "Thank you for your correspondence regarding infringement notice {fine_number}. To process your appeal, we require the following additional information: {missing_items}. Please provide this information within 14 business days quoting reference {fine_number}. If we do not receive the required documentation, the original infringement will stand.",
+    "needs_review": "Thank you for your correspondence regarding infringement notice {fine_number}. Your case has been flagged for detailed review by our Parking Review Panel due to the complexity of the circumstances described. A senior officer will contact you within 10 business days to discuss your case.",
+    "rejected": "Thank you for your correspondence regarding infringement notice {fine_number}. After reviewing the details provided, we are unable to identify grounds for waiving this infringement at {location}. Payment is due within 28 days. Payment options are available at our website or by contacting our office. If you believe this decision is incorrect, you may request a formal review through the Revenue NSW Penalty Notice Review process.",
+    "payment_info": "Thank you for your enquiry regarding infringement notice {fine_number}. Payment can be made online at our payment portal, by phone, or in person at our office. The payment deadline is 28 days from the date of issue.",
+    "hardship": "Thank you for your enquiry regarding infringement notice {fine_number}. We understand financial circumstances can be difficult. Payment plans are available — please contact our office to discuss options that suit your situation.",
+    "ranger_dispatch": "Thank you for reporting the parking issue at {location}. Your report has been logged and a Council Ranger will attend the area to investigate. Rangers prioritise reports based on safety risk and frequency. If the issue is ongoing, please report each occurrence.",
+    "safety_urgent": "Thank you for reporting the urgent parking safety concern at {location}. This has been flagged as a priority and a Ranger will attend as soon as possible. If there is an immediate danger to public safety, please also contact NSW Police on 131 444.",
+    "noted": "Thank you for your parking report. It has been logged in our system for monitoring. If you can provide additional details such as the specific location, time, and vehicle description, it will help our Rangers investigate.",
+    "permit_application": "Thank you for your parking permit application for {location}. Your application has been received and will be processed within 10 business days. You will be notified of the outcome by email. Please ensure you have submitted proof of residency and vehicle registration.",
+    "permit_renewal": "Thank you for your permit renewal request for {location}. Your renewal will be processed within 5 business days. Your current permit remains valid until the renewal is finalised.",
+    "permit_incomplete": "Thank you for your parking permit enquiry. To process your application, we require: {missing_items}. Please submit the required documents to proceed.",
+    "general_info": "Thank you for your enquiry regarding parking in the {location} area. For a full map of parking zones, time restrictions, and permit information, please visit our website or contact our office."
+  }
+}

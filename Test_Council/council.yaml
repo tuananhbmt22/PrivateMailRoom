@@ -1,0 +1,34 @@
+# Test Council Configuration
+# This file defines the council-specific paths and settings.
+# The classification engine reads this to know where folders live.
+
+council: "Test Council"
+version: "1.0.0"
+
+paths:
+  receive_channel: "./receive_channel"
+  undetermined: "./undetermined"
+  departments_base: "./departments"
+
+# Map folder keys from the classification tree to physical department folders
+folder_map:
+  rates_general_matters: "departments/rates_general_matters"
+  regulated_premises: "departments/regulated_premises"
+  onsite_sewage_management: "departments/onsite_sewage_management"
+  waste_management_operations: "departments/waste_management_operations"
+  regulation_of_parking: "departments/regulation_of_parking"
+  financial_management_debtors: "departments/financial_management_debtors"
+  companion_animals: "departments/companion_animals"
+  building_control_property_enquiries: "departments/building_control_property_enquiries"
+  fire_safety_services: "departments/fire_safety_services"
+  roads_development_services: "departments/roads_development_services"
+  roads_maintenance: "departments/roads_maintenance"
+  rates_name_address_change: "departments/rates_name_address_change"
+  nhvr_applications_request: "departments/nhvr_applications_request"
+  nhvr_permit_issued: "departments/nhvr_permit_issued"
+  remittance_statements: "departments/remittance_statements"
+  finance_remittance_advices: "departments/finance_remittance_advices"
+  environmental_compliance_illegal_dumping: "departments/environmental_compliance_illegal_dumping"
+  sewerage_drainage: "departments/sewerage_drainage"
+  undetermined: "undetermined"
+  junk: "junk"

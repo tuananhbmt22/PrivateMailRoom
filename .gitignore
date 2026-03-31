@@ -1,0 +1,32 @@
+# Runtime folders (created at boot)
+receive_channel/
+junk/
+undetermined/
+
+# Database
+db/mailroom.db
+db/mailroom.db-wal
+db/mailroom.db-shm
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+*.egg-info/
+
+# Environment
+.env
+
+# Logs
+*.log
+
+# Credentials (NEVER commit)
+config/email.yaml
+config/oauth.yaml
+.token_cache.json
+
+# Runtime data
+_processed_uids.json
+_training_log.jsonl
+_history.json

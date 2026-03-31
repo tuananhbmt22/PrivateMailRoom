@@ -1,0 +1,20 @@
+{
+  "event_id": "event_001_20260331_141855_20260331_144016_20260331_145048_20260331_145913_20260331_151515",
+  "classified_at": "2026-03-31T15:18:16.762213",
+  "outcome": "Regulation of Parking",
+  "confidence": 0.95,
+  "reasoning": "Event contains explicit references to parking fine, infringement notice, clearway, and school zone \u2014 all triggers for Regulation of Parking; no exclusions apply.",
+  "linked_files": [
+    "_history.json",
+    "_skill_result.json",
+    "email_body.txt",
+    "evidence_photo.txt"
+  ],
+  "file_count": 4,
+  "llm_latency_ms": 42379.0,
+  "llm_tokens_used": 7897,
+  "inference_success": true,
+  "inference_error": null,
+  "source_path": "/home/cael/.openclaw/workspace/apps/mailroom/Test_Council/receive_channel/event_001_20260331_141855_20260331_144016_20260331_145048_20260331_145913_20260331_151515",
+  "destination_path": "/home/cael/.openclaw/workspace/apps/mailroom/Test_Council/departments/regulation_of_parking/event_001_20260331_141855_20260331_144016_20260331_145048_20260331_145913_20260331_151515"
+}

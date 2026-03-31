@@ -1,0 +1,17 @@
+{
+  "event_id": "event_parking_payment_002",
+  "classified_at": "2026-03-31T14:31:34.745602",
+  "outcome": "Regulation of Parking",
+  "confidence": 0.95,
+  "reasoning": "The event explicitly mentions a parking fine (PKG-2026-5587), clearway infringement, and payment confirmation request for a parking violation \u2014 all directly matching triggers in the Regulation of Parking folder.",
+  "linked_files": [
+    "email_body.txt"
+  ],
+  "file_count": 1,
+  "llm_latency_ms": 23609.0,
+  "llm_tokens_used": 5863,
+  "inference_success": true,
+  "inference_error": null,
+  "source_path": "/home/cael/.openclaw/workspace/apps/mailroom/Test_Council/receive_channel/event_parking_payment_002",
+  "destination_path": "/home/cael/.openclaw/workspace/apps/mailroom/Test_Council/departments/regulation_of_parking/event_parking_payment_002"
+}

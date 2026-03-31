@@ -1,0 +1,12 @@
+{
+  "skill_id": "parking",
+  "request_type": "error",
+  "outcome": "execution_failed",
+  "metadata": {},
+  "analysis": "Scroll execution failed: LLM inference timed out after 120s",
+  "missing_info": [],
+  "response_template_key": "",
+  "suggested_folder": "regulation_of_parking",
+  "confidence": 0.0,
+  "error": "LLM inference timed out after 120s"
+}

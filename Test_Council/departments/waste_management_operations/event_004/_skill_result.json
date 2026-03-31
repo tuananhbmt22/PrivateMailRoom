@@ -1,0 +1,19 @@
+{
+  "skill_id": "waste_management",
+  "request_type": "missed_collection",
+  "outcome": "recurring_issue",
+  "metadata": {
+    "address": "22 Oak Avenue",
+    "bin_type": "red_lid",
+    "issue_description": "Red lid bin not collected, second occurrence in three weeks",
+    "is_recurring": true,
+    "location": "22 Oak Avenue"
+  },
+  "analysis": "Resident reports red lid bin was missed at 22 Oak Avenue. This is the second time in three weeks, indicating a recurring collection issue that requires escalation to Waste Operations.",
+  "missing_info": [],
+  "response_template_key": "recurring_issue",
+  "suggested_folder": "waste_management_operations",
+  "confidence": 0.95,
+  "llm_tokens": 3399,
+  "llm_latency_ms": 29163.80810600007
+}

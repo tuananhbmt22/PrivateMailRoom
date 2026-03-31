@@ -1,0 +1,21 @@
+Delivered-To: tuananhbmt1996@gmail.com
+Received: by 2002:a05:6f02:513:b0:119:cf82:26d4 with SMTP id 19csp1393666rch;        Sun, 29 Mar 2026 22:28:42 -0700 (PDT)
+X-Received: by 2002:a05:7300:a584:b0:2be:833c:149d with SMTP id 5a478bee46e88-2c185ef43abmr6039261eec.28.1774848521743;        Sun, 29 Mar 2026 22:28:41 -0700 (PDT)
+ARC-Seal: i=1; a=rsa-sha256; t=1774848521; cv=none;        d=google.com; s=arc-20240605;        b=i9tf3t9950V2Q5BP7BHRPuEfatwMhV+TBf+K6g9PCwHNgU37qxZzfTe+c0juPXl6gY         YqPtSu79TQlxMEFSqdnLAnu70Z0i4W0sNne1F9v1x9Nq+j5CvJfFduqv1zs+uCbUfV//         olx1xVzLj2nETYOJasnUkWaBcp1P2bhlZmRyxg1TkHueCJTox3FAXSbHILaMfTqk7n5R         LfBD9k3K8pXsoAo9/v92SoYkoUFrrI1INSbnvmUeElR2VSmY3OTiZlrVJ1PEgggJ9OBw         2CoNNovEL4Xt6v1ZZ4W+iYQL9k9WpvSRM9EqYAP7EFfP0d45Tt1ZnIhpBJmLXLhMEOoZ         /yOw==
+ARC-Message-Signature: i=1; a=rsa-sha256; c=relaxed/relaxed; d=google.com; s=arc-20240605;        h=mime-version:subject:message-id:to:from:date:dkim-signature         :dkim-filter;        bh=UH7Lp+aoBs4a1f6/QaUVlipFyGrYMLXjdqvsPlt3uWw=;        fh=lp4v3P7Kzw/mgeyjKxittLSmzrUOoL2AFQGXE99UsS4=;        b=bxL2Y+HtqeaqLYkF4oE2dHh/77RaUYZ6mc4QgrLnrvH0aYowdAVuhL+n8H4svI5Nzv         3I1jx4xtG8qslR0w3Elgl/CN/zmQPtOjbo2v7W5ImcS3n70k8dz4JwZ5HDmlxrFLalaV         jL9AusccVMCtSBOi62l5aa00lqERuqV+BBYgUwZTdmlN7RvQEhuHcb7rQx7nj6gMTzhQ         27xnWQnjdTrp7P3zGY9WXd2uLuJ/oET/M4yXMi/yVlxaSZKne51A/01OpczTGqYWGMGl         lA6/ZIEnCPajAt3GgtOTpHJWLuBMFFwkDayHBv/nCZ9hXz8/fqKgn7gQVmtHyGhOjyVg         bbEw==;        dara=google.com
+ARC-Authentication-Results: i=1; mx.google.com;       dkim=pass header.i=@ebay.com.au header.s=dkim1k header.b=KasHzYjT;       spf=pass (google.com: domain of ebay@information.ebay.com.au designates 66.211.185.156 as permitted sender) smtp.mailfrom=ebay@information.ebay.com.au;       dmarc=pass (p=REJECT sp=REJECT dis=NONE) header.from=ebay.com.au
+Return-Path: <ebay@information.ebay.com.au>
+Received: from mxphxpool1053.ebay.com (mxphxpool1053.ebay.com. [66.211.185.156])        by mx.google.com with ESMTPS id 5a478bee46e88-2c3c817d06esi16938840eec.76.2026.03.29.22.28.41        for <tuananhbmt1996@gmail.com>        (version=TLS1_3 cipher=TLS_AES_256_GCM_SHA384 bits=256/256);        Sun, 29 Mar 2026 22:28:41 -0700 (PDT)
+Received-SPF: pass (google.com: domain of ebay@information.ebay.com.au designates 66.211.185.156 as permitted sender) client-ip=66.211.185.156;
+Authentication-Results: mx.google.com;       dkim=pass header.i=@ebay.com.au header.s=dkim1k header.b=KasHzYjT;       spf=pass (google.com: domain of ebay@information.ebay.com.au designates 66.211.185.156 as permitted sender) smtp.mailfrom=ebay@information.ebay.com.au;       dmarc=pass (p=REJECT sp=REJECT dis=NONE) header.from=ebay.com.au
+DKIM-Filter: OpenDKIM Filter v2.11.0 mxphxpool1053.ebay.com 62U5Se1d442782
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; d=ebay.com.au;	s=dkim1k; t=1774848520;	bh=UH7Lp+aoBs4a1f6/QaUVlipFyGrYMLXjdqvsPlt3uWw=;	h=Date:From:To:Subject;	b=KasHzYjTS6V4WKP0D2sQnjYhB2zhsKu2fgvJBaD11mi0zy4YPlG5abF4oAsEot/kV	 4jXd7qUWHn6Tao1FUF1gOS+COgI4h0eTOuaQshAJ2EYh1wK+FiHMF1ebeX23EWYjAs	 HNNqMmPnAHTl5YQviqDMZQGe0yfMl6swOY7yGkr0=
+Received: from kirk0cont-6c6b6cf447-tess40-lpz99 ([10.85.83.123])	by mxphxpool1053.ebay.com (8.15.2/8.15.2) with ESMTP id 62U5Se1d442782	for <tuananhbmt1996@gmail.com>; Mon, 30 Mar 2026 05:28:40 GMT
+Date: Sun, 29 Mar 2026 22:28:40 -0700
+From: eBay <ebay@information.ebay.com.au>
+To: tuananhbmt1996@gmail.com
+Message-ID: <a61f03dc-3205-30af-a89a-639bcb2d0c21@starship>
+Subject: Updates to eBay User Agreement
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="----=_Part_8901471_2058181074.1774848520627"
+X-eBay-MailTracker: UEP.000.0.0.a61f03dc-3205-30af-a89a-639bcb2d0c21

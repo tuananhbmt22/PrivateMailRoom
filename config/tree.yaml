@@ -1,0 +1,160 @@
+# Department Tree Schema
+# Defines the classification targets for the AI inference engine.
+# Each department has a unique key, display name, destination path, and document subtypes.
+
+confidence_threshold: 0.7
+
+departments:
+  parking:
+    name: "Parking & Traffic"
+    subtypes:
+      - fine_tickets
+      - image_evidence
+      - appeal_papers
+      - permits
+      - clearway_violations
+
+  hr:
+    name: "Human Resources"
+    subtypes:
+      - leave_applications
+      - recruitment
+      - complaints
+      - performance_reviews
+      - onboarding
+
+  waste:
+    name: "Waste Management"
+    subtypes:
+      - collection_requests
+      - complaints
+      - contractor_reports
+      - bin_replacements
+
+  planning:
+    name: "Planning & Development"
+    subtypes:
+      - development_applications
+      - building_certificates
+      - compliance_notices
+      - zoning_requests
+
+  rates:
+    name: "Rates & Revenue"
+    subtypes:
+      - rate_notices
+      - payment_receipts
+      - objections
+      - pensioner_rebates
+
+  environmental:
+    name: "Environmental Services"
+    subtypes:
+      - noise_complaints
+      - pollution_reports
+      - tree_applications
+      - stormwater
+
+  community:
+    name: "Community Services"
+    subtypes:
+      - event_applications
+      - facility_bookings
+      - grants
+      - volunteer_registrations
+
+  infrastructure:
+    name: "Infrastructure & Works"
+    subtypes:
+      - road_maintenance
+      - footpath_repairs
+      - drainage
+      - streetlighting
+
+  governance:
+    name: "Governance & Legal"
+    subtypes:
+      - council_minutes
+      - legal_correspondence
+      - foi_requests
+      - policy_documents
+
+  finance:
+    name: "Finance"
+    subtypes:
+      - invoices
+      - purchase_orders
+      - budget_reports
+      - audit_documents
+
+  customer_service:
+    name: "Customer Service"
+    subtypes:
+      - general_enquiries
+      - feedback
+      - service_requests
+
+  health:
+    name: "Health & Building"
+    subtypes:
+      - food_inspections
+      - swimming_pool_compliance
+      - building_complaints
+      - fire_safety
+
+  parks:
+    name: "Parks & Recreation"
+    subtypes:
+      - maintenance_requests
+      - playground_inspections
+      - sports_field_bookings
+
+  animal_control:
+    name: "Animal Control"
+    subtypes:
+      - registration
+      - complaints
+      - impound_notices
+      - dangerous_dog_orders
+
+  emergency:
+    name: "Emergency Management"
+    subtypes:
+      - incident_reports
+      - evacuation_plans
+      - recovery_documents
+
+  property:
+    name: "Property & Assets"
+    subtypes:
+      - lease_agreements
+      - valuations
+      - maintenance_schedules
+
+  it:
+    name: "Information Technology"
+    subtypes:
+      - service_requests
+      - incident_reports
+      - procurement
+
+  communications:
+    name: "Communications & Media"
+    subtypes:
+      - media_releases
+      - social_media_reports
+      - newsletters
+
+  procurement:
+    name: "Procurement & Contracts"
+    subtypes:
+      - tender_documents
+      - contracts
+      - supplier_correspondence
+
+  records:
+    name: "Records Management"
+    subtypes:
+      - archive_requests
+      - disposal_schedules
+      - classification_reviews

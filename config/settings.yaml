@@ -1,0 +1,59 @@
+# Mailroom Runtime Settings
+# Values here can be overridden by environment variables.
+
+pipeline:
+  max_concurrent_workers: 4
+  queue_max_size: 500
+  shutdown_timeout_seconds: 30
+
+watcher:
+  debounce_seconds: 2.0
+  supported_extensions:
+    - .pdf
+    - .docx
+    - .doc
+    - .jpg
+    - .jpeg
+    - .png
+    - .tiff
+    - .tif
+    - .eml
+    - .msg
+
+classification:
+  confidence_threshold: 0.7
+  max_retries: 1
+  timeout_seconds: 60
+
+dispatch:
+  atomic_verify: true
+  copy_retries: 3
+  copy_retry_delay_seconds: 2.0
+  preserve_permissions: true
+  conflict_suffix_format: "_%Y%m%d_%H%M%S"
+
+notifications:
+  backend: "smtp"          # smtp | dashboard | file
+  undetermined: true
+  crash: true
+  integration_failure: true
+
+maintenance:
+  junk_purge_days: 30
+  db_retention_years: 7
+  log_retention_days: 90
+
+dashboard:
+  host: "0.0.0.0"
+  port: 5000
+  sse_keepalive_seconds: 30
+
+integrations:
+  cm9:
+    enabled: false
+    max_retries: 5
+    backoff_base_seconds: 2
+  techone:
+    enabled: false
+    max_retries: 5
+    backoff_base_seconds: 2

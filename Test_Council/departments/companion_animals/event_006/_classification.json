@@ -1,0 +1,21 @@
+{
+  "event_id": "event_006",
+  "classified_at": "2026-03-31T15:25:18.188008",
+  "outcome": "Companion Animals",
+  "confidence": 1.0,
+  "reasoning": "Event contains explicit C3C Change of Ownership form for a dog registration transfer with supporting desexing certificate and email requesting ownership update.",
+  "linked_files": [
+    "_history.json",
+    "_skill_result.json",
+    "c3c_form.txt",
+    "desexing_certificate.txt",
+    "email_body.txt"
+  ],
+  "file_count": 5,
+  "llm_latency_ms": 26055.0,
+  "llm_tokens_used": 6725,
+  "inference_success": true,
+  "inference_error": null,
+  "source_path": "/home/cael/.openclaw/workspace/apps/mailroom/Test_Council/receive_channel/event_006",
+  "destination_path": "/home/cael/.openclaw/workspace/apps/mailroom/Test_Council/departments/companion_animals/event_006"
+}

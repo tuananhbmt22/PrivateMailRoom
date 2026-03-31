@@ -1,0 +1,334 @@
+{
+  "version": "1.0.0",
+  "description": "Kajima Mailroom Classification Tree — 20 target folders derived from council document routing rules",
+  "confidence_threshold": 0.70,
+  "fallback": "unclassified",
+  "folders": {
+    "rates_general_matters": {
+      "name": "Rates General Matters",
+      "description": "Rates refunds, adjustments, extensions, overpayments, authority to act, deceased estates, reissue requests, paperless/email delivery",
+      "triggers": [
+        "rates enquiry", "rates adjustment", "overpaid", "rates outstanding",
+        "estate of the late", "reissue rates", "rates refund", "refund request",
+        "authority to act", "paperless", "email rates"
+      ],
+      "exclusions": [
+        "No mention of rates, billing terms, or property ownership — even if about a property"
+      ],
+      "actions": {
+        "paperless_or_email_rates": "A1",
+        "enquiry_adjustment_outstanding_estate_reissue": "A2",
+        "refund_request": "A3",
+        "authority_to_act": "A4",
+        "default": "A17"
+      }
+    },
+    "regulated_premises": {
+      "name": "Regulated Premises",
+      "description": "Food business registration, food trucks, mobile vendors, home-based food, beauty salons, skin clinics, tattooing, waxing, skin penetration, health inspections, compliance",
+      "triggers": [
+        "food business notification", "inspection", "permits", "business registration",
+        "temporary food business notification", "business enquiry", "skin penetration",
+        "skin clinic", "beauty", "approval to operate", "food complaint",
+        "cleanliness", "food safety", "food labelling"
+      ],
+      "exclusions": [
+        "Payment confirmations, fees, or financial statements only → Finance folders",
+        "Waste logistics (collection, bins, delivery, pickup) → Waste Management",
+        "Unsanitary waste from neighbouring properties (pests, hygiene) routes HERE not Waste"
+      ],
+      "actions": {
+        "food_complaint_cleanliness_safety_labelling": "A6",
+        "default": "A17"
+      }
+    },
+    "onsite_sewage_management": {
+      "name": "Onsite Sewage Management Septic Service Reports",
+      "description": "Septic system servicing, inspection, OSSM reports, quarterly maintenance, garden master work, residential sewage treatment compliance",
+      "triggers": [
+        "septic service report", "septic inspection request", "new septic service provider",
+        "OSSM", "onsite sewage", "garden master"
+      ],
+      "exclusions": [
+        "If 'septic' appears with invoice/payment/fee/reminder terms → Financial Management Debtors"
+      ],
+      "actions": {
+        "service_report_or_inspection_or_new_provider": "A5",
+        "default": "A17"
+      }
+    },
+    "waste_management_operations": {
+      "name": "Waste Management Operations Collection Services",
+      "description": "Bin requests (new, missing, stolen, damaged, repair), waste collection issues, bulk waste, mattress pickup, extra bins",
+      "triggers": [
+        "missed bin", "not emptied", "not collected", "bin repair", "damaged bin",
+        "broken bin", "stolen bin", "collection enquiry", "garbage enquiry",
+        "additional service", "new waste service", "bulk waste", "mattress pickup"
+      ],
+      "exclusions": [
+        "If 'blue disc' is mentioned → unclassified",
+        "Issue about another person's waste or public dumping with no sender collection request → exclude",
+        "Abandoned waste in public with no sender request → Environmental Compliance Illegal Dumping",
+        "Unsanitary waste from neighbours (pests/hygiene) → Regulated Premises",
+        "Waste + payment/costs only → exclude from here"
+      ],
+      "actions": {
+        "missed_not_emptied_not_collected": "A7",
+        "bin_repair_damaged_broken": "A8",
+        "stolen_bin": "A9",
+        "collection_garbage_enquiry_additional_new_service": "A10",
+        "default": "A17"
+      }
+    },
+    "regulation_of_parking": {
+      "name": "Regulation of Parking",
+      "description": "Parking fines, illegal/improper parking, infringement notices, vehicles blocking driveways/school zones/roads, ranger enforcement, truck parking",
+      "triggers": [
+        "parking", "parked", "park", "illegal parking", "truck parking", "fine",
+        "infringement", "ranger", "clearway", "no stopping"
+      ],
+      "exclusions": [],
+      "actions": {
+        "illegal_parking_truck_parking_fine": "A11",
+        "default": "A17"
+      }
+    },
+    "financial_management_debtors": {
+      "name": "Financial Management Debtors",
+      "description": "Unpaid invoices, overdue accounts, account receivables, billing follow-ups, invoice requests/amendments, balance inquiries",
+      "triggers": [
+        "unpaid invoice", "invoice request", "overdue account", "statement",
+        "balance due", "request invoice", "amend invoice", "reissue",
+        "clarify", "enquiry"
+      ],
+      "exclusions": [
+        "If 'remittance' is mentioned → exclude",
+        "If real estate/property manager + amount received by council → Remittance Statements (unless requesting new invoice or overdue language)",
+        "Must contain clear reference to financial debt or receivable"
+      ],
+      "actions": {
+        "request_amend_reissue_clarify_enquiry": "A12",
+        "default": "A17"
+      }
+    },
+    "companion_animals": {
+      "name": "Companion Animals",
+      "description": "Pet registration, microchipping, desexing, lifetime registration, wandering/stray/barking/lost pets, rehoming, cat and dog licensing",
+      "triggers": [
+        "dog", "cat", "pet", "animal", "microchipping", "desexing",
+        "lifetime registration", "animal forms", "P1A", "C3A", "C3C",
+        "wandering pets", "barking dog", "stray", "rehoming", "lost pets",
+        "change of owner", "change of ownership", "permanent identification",
+        "sterilisation", "animal registration", "registration form"
+      ],
+      "exclusions": [
+        "Dog attack or public danger event → exclude from here",
+        "Violence or aggression → exclude"
+      ],
+      "actions": {
+        "change_owner_C3C_P1A_sterilisation_desexing_registration": "A13",
+        "barking_dog_noise": "A14",
+        "wandering_roaming_stray_loose": "A15",
+        "default": "A17"
+      }
+    },
+    "building_control_property_enquiries": {
+      "name": "Building Control Property Enquiries",
+      "description": "Development applications, planning enquiries, fences, sheds, carports, pools, retaining walls, dwellings, subdivision, zoning, land use, Build Over Asset approvals",
+      "triggers": [
+        "inquiry", "enquiry", "development application", "DA", "zoning",
+        "subdivision", "boundary adjustment", "dual occupancy", "change of use",
+        "dwelling", "shed", "garage", "carport", "retaining wall", "pool",
+        "granny flat", "secondary dwelling", "build over asset", "fee quote",
+        "A16"
+      ],
+      "exclusions": [
+        "Regulated business activity → Regulated Premises",
+        "Roads or public infrastructure → Roads folders"
+      ],
+      "actions": {
+        "A16_reference": "A16",
+        "build_over_asset": "A17",
+        "fee_quote": "A18",
+        "subdivision_boundary_dual_occupancy_change_of_use": "A19",
+        "dwelling_shed_garage_carport_wall_pool_granny_flat": "A20",
+        "default": "A17"
+      }
+    },
+    "fire_safety_services": {
+      "name": "Fire Safety Services",
+      "description": "Annual Fire Safety Statements (AFS/AFSS), fire inspections, fire-related demolition, fire compliance documents, certifications, fire protection systems",
+      "triggers": [
+        "AFS", "AFSS", "fire", "fire safety statement", "fire inspection",
+        "fire compliance", "fire protection", "fire hazard", "fire risk",
+        "annual fire safety"
+      ],
+      "exclusions": [
+        "If 'fire' is not connected to safety, inspection, demolition, or AFSS → exclude"
+      ],
+      "actions": {
+        "all": "A21"
+      }
+    },
+    "roads_development_services": {
+      "name": "Roads Development Services and Roads Act Applications",
+      "description": "Section 138 approvals, driveway works, road access applications, RA references (RA-YYYY-XXXX), road restoration plans, S138 inspections",
+      "triggers": [
+        "RA-", "S138", "Section 138", "driveway access application",
+        "driveway approval", "driveway inspection", "driveway additional information",
+        "driveway enquiry", "Ref: 44/2024/392/1", "Ref no 44/2024/393/1",
+        "Roads Act"
+      ],
+      "exclusions": [
+        "Customer request to repair existing road conditions (potholes, erosion, gutter) → Roads Maintenance",
+        "Phrases like 'fix the problem', 'washed away with rain', 'surface deteriorated' → Roads Maintenance"
+      ],
+      "actions": {
+        "driveway_inspection_request": "A22",
+        "driveway_additional_information": "Section 138 Roads Act Applications",
+        "driveway_enquiry": "A24",
+        "default": "A17"
+      }
+    },
+    "roads_maintenance": {
+      "name": "Roads Maintenance Correspondence Incoming",
+      "description": "Potholes, gravel, grading, footpath damage, unsealed road damage, general road upkeep, road sealing/widening/clearing requests",
+      "triggers": [
+        "maintenance road", "maintenance street", "pothole", "gravel", "grading",
+        "footpath maintenance", "unsealed road", "road repairs", "road damage",
+        "road sealing", "road widening", "overgrowth"
+      ],
+      "exclusions": [
+        "If Section 138 or driveway application → Roads Development Services"
+      ],
+      "actions": {
+        "footpath_maintenance": "A25",
+        "general_road_repairs": "Maintenance - Roads (General Repairs)",
+        "pothole": "Maintenance - Roads (Pothole Repairs)",
+        "unsealed_road_grading": "Maintenance - Roads (Unsealed Grading)",
+        "default": "A17"
+      }
+    },
+    "rates_name_address_change": {
+      "name": "Rates Name/Address Change or Ownership Update Requests",
+      "description": "Mailing address changes, property ownership updates, agent-managed updates, postal corrections, name adjustments, email changes linked to rates accounts",
+      "triggers": [
+        "change of address", "change of name", "managing agent",
+        "update address", "update email", "change postal address",
+        "change physical address", "ownership update", "NAR"
+      ],
+      "exclusions": [
+        "Water flow, stormwater runoff, drainage problems → Sewerage Drainage",
+        "Requests for email/paperless rate notices → Rates General Matters"
+      ],
+      "actions": {
+        "change_address_name_managing_agent": "A29",
+        "default": "A17"
+      }
+    },
+    "nhvr_applications_request": {
+      "name": "National Heavy Vehicle Regulator Applications Request",
+      "description": "NHVR consent requests, applications, case IDs awaiting response, council action/input/approval for vehicle permits",
+      "triggers": [
+        "NHVR", "NHVR Portal – Consent Request", "consent requested",
+        "heavy vehicle", "National Heavy Vehicle"
+      ],
+      "exclusions": [
+        "If message confirms permit issuance or final approval → NHVR Permit Issued folder"
+      ],
+      "actions": {
+        "all": "A30"
+      }
+    },
+    "nhvr_permit_issued": {
+      "name": "National Heavy Vehicle Regulator Application Permit Issued",
+      "description": "NHVR permit confirmations, approved submissions, regulatory/logistics updates for heavy vehicle movement approvals",
+      "triggers": [
+        "NHVR Portal – Permit Issued", "permit issued", "permit granted"
+      ],
+      "exclusions": [
+        "If both 'Consent Request' and 'Permit' appear → NHVR Applications Request folder"
+      ],
+      "actions": {
+        "all": "A30"
+      }
+    },
+    "remittance_statements": {
+      "name": "Remittance Statements",
+      "description": "Payment confirmations from real estate agents, property managers, strata groups confirming income/payment received by Council",
+      "triggers": [
+        "were paid", "payment has been made", "funds will appear",
+        "confirm payment", "statement attached", "financial statement",
+        "statement number", "property management"
+      ],
+      "exclusions": [
+        "Must come from real estate, property, or strata entity",
+        "If requesting new invoice or overdue language → Financial Management Debtors"
+      ],
+      "actions": {
+        "all": "A17"
+      }
+    },
+    "finance_remittance_advices": {
+      "name": "Finance Remittance Advices",
+      "description": "Vendor/supplier/third-party payment confirmations to Council — NOT property or rates related",
+      "triggers": [
+        "remittance advice", "EFT payment", "EFT remittance",
+        "payment advice", "vendor payment", "payment date",
+        "settlement advice", "vendor ID"
+      ],
+      "exclusions": [
+        "If 'rates' appears anywhere → Remittance Statements",
+        "If from real estate or strata managers → Remittance Statements",
+        "Must NOT confirm rental or property-related income"
+      ],
+      "actions": {
+        "all": "A12"
+      }
+    },
+    "environmental_compliance_illegal_dumping": {
+      "name": "Environmental Compliance Illegal Dumping",
+      "description": "Dumped rubbish, abandoned waste, unauthorized disposal, RID/RIDOnline incidents, public complaints about illegal dumping",
+      "triggers": [
+        "RID", "RIDOnline", "illegal dumping", "dumped rubbish",
+        "abandoned waste", "unauthorized disposal"
+      ],
+      "exclusions": [
+        "Routine collection failure → Waste Management Operations"
+      ],
+      "actions": {
+        "all": "A31"
+      }
+    },
+    "sewerage_drainage": {
+      "name": "Sewerage Drainage Customer Request Management Correspondence",
+      "description": "Stormwater, sewerage, water runoff, culverts, flooding, drainage issues, creek blockages, gutter/kerb drainage, pipe issues",
+      "triggers": [
+        "stormwater", "sewerage", "water runoff", "culvert", "flooding",
+        "drainage", "creek", "blocked outlet", "kerb drainage",
+        "sewer overflow", "discharge outlet", "rainwater flooding"
+      ],
+      "exclusions": [
+        "If core intent is financial (confirming/requesting invoices) → Remittance Statements or Financial Management Debtors"
+      ],
+      "actions": {
+        "all": "A32"
+      }
+    },
+    "unclassified": {
+      "name": "Unclassified",
+      "description": "Fallback for documents that match no folder, have ambiguous routing, insufficient detail, or require attachment review",
+      "triggers": [],
+      "exclusions": [],
+      "actions": {
+        "all": "A17"
+      }
+    }
+  },
+  "global_rules": {
+    "mail_out_report_attached": "Always returns unclassified",
+    "attachment_dependency": "If attachments must be opened to understand the issue and message body lacks sufficient info → unclassified",
+    "multi_folder_ambiguity": "If multiple folders seem plausible after exclusion logic → unclassified",
+    "default_action": "A17 unless a folder rule explicitly defines a specific action"
+  }
+}

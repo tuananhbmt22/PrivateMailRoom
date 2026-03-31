@@ -1,0 +1,20 @@
+{
+  "event_id": "event_004",
+  "classified_at": "2026-03-31T15:27:20.380631",
+  "outcome": "Waste Management Operations Collection Services",
+  "confidence": 0.95,
+  "reasoning": "Event contains clear triggers 'not collected' and 'red lid bin' indicating a missed waste collection request; no exclusions apply as this is the sender's own bin with a direct collection request.",
+  "linked_files": [
+    "_history.json",
+    "_skill_result.json",
+    "bin_photo.txt",
+    "email_body.txt"
+  ],
+  "file_count": 4,
+  "llm_latency_ms": 26423.0,
+  "llm_tokens_used": 6538,
+  "inference_success": true,
+  "inference_error": null,
+  "source_path": "/home/cael/.openclaw/workspace/apps/mailroom/Test_Council/receive_channel/event_004",
+  "destination_path": "/home/cael/.openclaw/workspace/apps/mailroom/Test_Council/departments/waste_management_operations/event_004"
+}

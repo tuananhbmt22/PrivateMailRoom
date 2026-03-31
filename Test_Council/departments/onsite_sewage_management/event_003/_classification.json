@@ -1,0 +1,18 @@
+{
+  "event_id": "event_003",
+  "classified_at": "2026-03-30T14:49:04.942920",
+  "outcome": "Onsite Sewage Management Septic Service Reports",
+  "confidence": 1.0,
+  "reasoning": "Event contains explicit 'septic service report' and 'OSSM' terminology with quarterly inspection details for a residential property, matching all triggers in the Onsite Sewage Management folder.",
+  "linked_files": [
+    "email_body.txt",
+    "inspection_report.txt"
+  ],
+  "file_count": 2,
+  "llm_latency_ms": 13895.0,
+  "llm_tokens_used": 5565,
+  "inference_success": true,
+  "inference_error": null,
+  "source_path": "/home/cael/.openclaw/workspace/apps/mailroom/Test_Council/receive_channel/event_003",
+  "destination_path": "/home/cael/.openclaw/workspace/apps/mailroom/Test_Council/departments/onsite_sewage_management/event_003"
+}

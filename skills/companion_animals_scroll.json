@@ -1,0 +1,143 @@
+{
+  "skill_id": "companion_animals",
+  "skill_name": "Companion Animals",
+  "version": "1.0",
+  "department_key": "companion_animals",
+  "description": "Handles pet registration, microchipping, desexing, barking complaints, wandering animals, and ownership changes",
+
+  "matching": {
+    "keywords": ["dog", "cat", "pet", "animal", "barking", "registration", "microchip", "desexing", "stray", "wandering", "lost"],
+    "concepts": ["pet registration", "animal complaint", "companion animal management", "lost pet", "ownership transfer"]
+  },
+
+  "context": {
+    "nsw_legislation": "Companion Animals Act 1998 (NSW)",
+    "registration_requirement": "All cats and dogs must be registered with the local council by 6 months of age",
+    "microchip_requirement": "All cats and dogs must be microchipped by 12 weeks of age",
+    "desexing_incentive": "Reduced registration fee for desexed animals",
+    "forms": {
+      "P1A": "Permanent Identification (microchip) notification",
+      "C3A": "New registration form",
+      "C3C": "Change of ownership form"
+    }
+  },
+
+  "request_types": {
+    "registration": {
+      "description": "New pet registration or registration renewal",
+      "checks": [
+        "Is this a new registration or renewal?",
+        "Is the animal microchipped (microchip number provided)?",
+        "Is the animal desexed?",
+        "Is the owner's address within council boundaries?",
+        "Which form is being submitted (C3A, P1A)?"
+      ],
+      "outcomes": {
+        "new_registration": "New registration with all required information",
+        "renewal": "Registration renewal request",
+        "incomplete_registration": "Missing required information (microchip, address, form)"
+      }
+    },
+    "ownership_change": {
+      "description": "Transfer of pet ownership from one person to another",
+      "checks": [
+        "Is a C3C form provided or referenced?",
+        "Are both previous and new owner details provided?",
+        "Is the microchip number provided?",
+        "Is the new address within council boundaries?"
+      ],
+      "outcomes": {
+        "transfer_complete": "All required information provided for ownership transfer",
+        "transfer_incomplete": "Missing required details for transfer"
+      }
+    },
+    "barking_complaint": {
+      "description": "Complaint about a barking or noisy dog",
+      "checks": [
+        "Is the address of the barking dog provided?",
+        "How long has the issue been occurring?",
+        "What times does the barking occur?",
+        "Has the complainant spoken to the dog owner?"
+      ],
+      "outcomes": {
+        "formal_complaint": "Sufficient detail for formal investigation",
+        "mediation_suggested": "Recommend neighbour mediation first",
+        "insufficient_detail": "Need more information to investigate"
+      }
+    },
+    "wandering_animal": {
+      "description": "Report of a stray, wandering, or lost animal",
+      "checks": [
+        "Is this the reporter's own lost pet or someone else's animal?",
+        "Is a location provided?",
+        "Is the animal description provided (breed, colour, size)?",
+        "Is the animal aggressive or in danger?",
+        "Is a microchip or registration number known?"
+      ],
+      "outcomes": {
+        "ranger_dispatch": "Wandering animal reported with location, ranger can attend",
+        "lost_pet_report": "Owner reporting their own lost pet",
+        "found_animal": "Someone found an animal and is reporting it",
+        "urgent_safety": "Animal is aggressive or in immediate danger"
+      }
+    },
+    "desexing_notification": {
+      "description": "Notification that an animal has been desexed, often with vet certificate",
+      "checks": [
+        "Is a desexing certificate or vet confirmation provided?",
+        "Is the microchip number provided?",
+        "Is the animal currently registered?"
+      ],
+      "outcomes": {
+        "update_record": "Valid desexing notification, update registration record",
+        "fee_reduction": "Eligible for reduced registration fee",
+        "needs_verification": "Missing certificate or microchip number"
+      }
+    },
+    "enquiry": {
+      "description": "General question about pet registration, fees, or requirements",
+      "checks": [
+        "Is this about registration fees?",
+        "Is this about microchipping requirements?",
+        "Is this about desexing requirements?",
+        "Is this about dangerous dog declarations?"
+      ],
+      "outcomes": {
+        "general_info": "Provide relevant companion animal information"
+      }
+    }
+  },
+
+  "metadata_fields": {
+    "animal_type": "dog or cat",
+    "animal_name": "Pet's name if provided",
+    "breed": "Breed if mentioned",
+    "microchip_number": "Microchip number if provided",
+    "registration_number": "Registration number if provided",
+    "owner_name": "Owner's name",
+    "owner_address": "Owner's address",
+    "is_desexed": "Whether the animal is desexed (true/false/unknown)",
+    "form_type": "Which form submitted (P1A, C3A, C3C, none)",
+    "request_type": "Determined request type",
+    "complaint_address": "Address of the animal being complained about"
+  },
+
+  "response_templates": {
+    "new_registration": "Thank you for registering your {animal_type} ({animal_name}) with Council. Your registration has been received and will be processed within 10 business days. You will receive your registration tag and certificate by post. Registration number will be provided upon processing.",
+    "renewal": "Thank you for your registration renewal for {animal_name}. Your renewal will be processed within 5 business days. Your current registration remains valid until the renewal is finalised.",
+    "incomplete_registration": "Thank you for your registration enquiry. To complete the registration, we require: {missing_items}. All cats and dogs in NSW must be registered by 6 months of age under the Companion Animals Act 1998.",
+    "transfer_complete": "Thank you for submitting the Change of Ownership (C3C) form for {animal_name} (microchip: {microchip_number}). The ownership transfer will be processed within 10 business days. Both the previous and new owner will receive confirmation.",
+    "transfer_incomplete": "Thank you for your ownership transfer request. To process the transfer, we require: {missing_items}. Please submit a completed C3C form with details of both the previous and new owner.",
+    "formal_complaint": "Thank you for your barking complaint regarding the property at {complaint_address}. Your complaint has been registered and a Council Ranger will investigate. The investigation process typically takes 14-21 days and may include noise monitoring.",
+    "mediation_suggested": "Thank you for reporting the barking issue. As a first step, we recommend speaking with your neighbour about the issue, as many barking problems can be resolved through direct communication. If the issue persists, please lodge a formal complaint and we will investigate.",
+    "insufficient_detail": "Thank you for your barking complaint. To investigate, we need: {missing_items}. Please provide the address of the dog, approximate times of barking, and how long the issue has been occurring.",
+    "ranger_dispatch": "Thank you for reporting the wandering {animal_type} at {location}. A Council Ranger will attend the area to locate and secure the animal. If the animal is microchipped, we will contact the owner directly.",
+    "lost_pet_report": "Thank you for reporting your lost {animal_type} ({animal_name}). Your report has been logged. We recommend also checking the NSW Pet Registry and local social media lost pet groups. If your pet is found by a Ranger, you will be contacted via the microchip details.",
+    "found_animal": "Thank you for reporting the found {animal_type} at {location}. A Ranger will attend to collect the animal and check for a microchip. If you are able to safely contain the animal, please keep it secure until the Ranger arrives.",
+    "urgent_safety": "Thank you for reporting the urgent animal safety concern at {location}. This has been flagged as a priority. A Ranger will attend as soon as possible. If there is an immediate danger to people, please also contact NSW Police on 131 444.",
+    "update_record": "Thank you for notifying us of the desexing of {animal_name} (microchip: {microchip_number}). Your registration record will be updated within 5 business days.",
+    "fee_reduction": "Thank you for the desexing notification for {animal_name}. Your registration record will be updated and you are now eligible for the reduced registration fee. Any fee adjustment will be applied to your next renewal.",
+    "needs_verification": "Thank you for your desexing notification. To update our records, we require: {missing_items}. Please provide a copy of the desexing certificate from your veterinarian.",
+    "general_info": "Thank you for your enquiry about companion animal services. For registration fees, microchipping requirements, and other information, please visit our website or contact our Companion Animals team."
+  }
+}

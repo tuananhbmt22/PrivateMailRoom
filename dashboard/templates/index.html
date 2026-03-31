@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kajima Mailroom — {{ council_name }}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/dashboard.css">
+</head>
+<body>
+    <header class="topbar">
+        <div class="topbar-left">
+            <span class="logo">{{ council_name }}</span>
+            <span class="title">Mailroom</span>
+        </div>
+        <div class="topbar-right">
+            <span class="email-status" id="emailStatus" onclick="toggleEmailPanel()">
+                <span class="email-dot disconnected" id="emailDot"></span>
+                <span id="emailStatusText">Mail: Not Connected</span>
+            </span>
+            <button class="topbar-icon-btn" onclick="toggleSettingsPanel()" title="Settings">⚙</button>
+            <span class="live-indicator" id="liveIndicator">
+                <span class="live-dot"></span> Live
+            </span>
+            <span class="stat" id="totalClassified">0 classified</span>
+        </div>
+    </header>
+
+    <div class="layout">
+        <!-- Left sidebar: Receive Channel + Undetermined -->
+        <aside class="sidebar">
+            <div class="sidebar-spacer"></div>
+
+            <div class="sidebar-controls">
+                <div class="sidebar-status" id="sidebarStatus"></div>
+                <div class="sidebar-actions">
+                    <div class="service-row">
+                        <span class="service-badge stopped" id="serviceStatus">○ Manual Mode</span>
+                        <button class="btn-stop" onclick="stopAllServices()" title="Stop all services">⏹</button>
+                    </div>
+                    <div class="action-row">
+                        <button class="btn btn-sm" id="pollBtn" onclick="pollInbox()">📧 Poll Inbox</button>
+                        <label class="toggle" title="Auto-poll every 30s">
+                            <input type="checkbox" id="autoPollToggle" onchange="toggleAutoPoll()">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="action-row">
+                        <button class="btn btn-sm btn-classify" id="classifyBtn" onclick="classifyAll()">🤖 Classify</button>
+                        <label class="toggle" title="Auto-classify after poll">
+                            <input type="checkbox" id="autoClassifyToggle" onchange="toggleAutoClassify()">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main content: Receiver → Folder grid + Activity -->
+        <main class="main">
+            <!-- Radial folder map with receiver at center -->
+            <section class="folder-map" id="folderMap">
+                <svg class="route-lines" id="routeLines"></svg>
+                <div class="receiver-box" id="receiverBox">
+                    <span class="receiver-icon">📥</span>
+                    <span class="receiver-label">Receiver</span>
+                    <span class="receiver-count" id="pendingCount">0</span>
+                    <span class="receiver-sub">pending</span>
+                    <div class="receiver-services" id="receiverServices"></div>
+                </div>
+                <div class="folder-orbit" id="folderGrid"></div>
+                <div class="save-template-bar" id="saveTemplateBar" style="display:none">
+                    <span class="save-template-label" id="saveTemplateLabel">Layout changed</span>
+                    <button class="btn btn-sm save-btn-new" id="saveNewBtn" onclick="saveTemplateAs()">Complete Template Setup</button>
+                    <button class="btn btn-sm save-btn-override" id="saveOverrideBtn" onclick="saveTemplateOverride()" style="display:none">Override</button>
+                </div>
+            </section>
+
+            <!-- Activity panel -->
+            <section class="activity-panel">
+                <!-- Polling Service -->
+                <div class="service-column">
+                    <div class="service-header">
+                        <span class="service-header-icon">📧</span>
+                        <span>Polling Service</span>
+                        <span class="service-status-dot" id="pollServiceDot"></span>
+                    </div>
+                    <div class="service-status-bar" id="pollStatusBar">Idle</div>
+                    <div class="service-log" id="pollLog">
+                        <div class="activity-empty">No polling activity</div>
+                    </div>
+                </div>
+
+                <!-- AI Pipeline -->
+                <div class="service-column">
+                    <div class="service-header">
+                        <span class="service-header-icon">🧠</span>
+                        <span>AI Pipeline</span>
+                        <span class="service-status-dot" id="pipelineServiceDot"></span>
+                    </div>
+                    <div class="service-status-bar" id="pipelineStatusBar">Idle</div>
+                    <div class="pipeline-events" id="pipelineEvents">
+                        <div class="activity-empty">No active tasks</div>
+                    </div>
+                </div>
+
+                <!-- Classification Service -->
+                <div class="service-column">
+                    <div class="service-header">
+                        <span class="service-header-icon">📂</span>
+                        <span>Classification</span>
+                        <span class="service-status-dot" id="classifyServiceDot"></span>
+                    </div>
+                    <div class="service-status-bar" id="classifyStatusBar">Idle</div>
+                    <div class="service-log" id="classifyLog">
+                        <div class="activity-empty">No classification activity</div>
+                    </div>
+                </div>
+
+                <!-- Results Log -->
+                <div class="service-column">
+                    <div class="service-header">
+                        <span class="service-header-icon">📋</span>
+                        <span>Results</span>
+                    </div>
+                    <div class="event-log-list" id="eventLogList"></div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Slide-out panel for folder details -->
+    <div class="panel-overlay" id="panelOverlay"></div>
+    <div class="panel" id="detailPanel">
+        <div class="panel-header">
+            <span class="panel-title" id="panelTitle">Folder</span>
+            <button class="panel-close" id="panelClose">&times;</button>
+        </div>
+        <div class="panel-description" id="panelDescription"></div>
+        <div class="panel-events" id="panelEvents"></div>
+    </div>
+
+    <!-- Modal for AI receipt / history -->
+    <div class="modal-overlay" id="modalOverlay">
+        <div class="modal" id="receiptModal">
+            <div class="modal-header">
+                <span class="modal-title" id="modalTitle">AI Classification Result</span>
+                <button class="modal-close" id="modalClose">&times;</button>
+            </div>
+            <pre class="modal-body" id="modalBody"></pre>
+        </div>
+    </div>
+
+    <!-- Correction wizard modal -->
+    <div class="modal-overlay" id="correctionOverlay">
+        <div class="modal correction-modal">
+            <div class="modal-header">
+                <span class="modal-title" id="correctionTitle">Move Event</span>
+                <button class="modal-close" onclick="closeCorrectionModal()">&times;</button>
+            </div>
+
+            <!-- Step 1: Why -->
+            <div class="wizard-step" id="wizStep1">
+                <div class="wizard-prompt">Why is this being moved?</div>
+                <div class="wizard-choices">
+                    <button class="wizard-choice" onclick="selectReason('ai_wrong')">
+                        <span class="wizard-choice-icon">🤖</span>
+                        <span class="wizard-choice-label">Misclassified</span>
+                        <span class="wizard-choice-desc">AI assigned wrong folder</span>
+                    </button>
+                    <button class="wizard-choice" onclick="selectReason('reassign')">
+                        <span class="wizard-choice-icon">📋</span>
+                        <span class="wizard-choice-label">Reassign</span>
+                        <span class="wizard-choice-desc">Route to different department</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Step 2a: AI Error details -->
+            <div class="wizard-step" id="wizStep2AI" style="display:none">
+                <div class="wizard-prompt">What went wrong?</div>
+                <div class="wizard-chips" id="aiFailureChips">
+                    <button class="wizard-chip" data-val="wrong_department" onclick="selectChip(this)">Wrong folder</button>
+                    <button class="wizard-chip" data-val="confidence_too_high" onclick="selectChip(this)">Too confident</button>
+                    <button class="wizard-chip" data-val="should_undetermined" onclick="selectChip(this)">Should be Undetermined</button>
+                    <button class="wizard-chip" data-val="trigger_mismatch" onclick="selectChip(this)">Wrong triggers matched</button>
+                </div>
+                <div class="wizard-field">
+                    <label>Correct folder</label>
+                    <select id="wizRedirectFolder"></select>
+                </div>
+                <div class="wizard-field">
+                    <label>Quick note</label>
+                    <input type="text" id="wizExplanation" placeholder="e.g., Was about dog registration, not parking">
+                </div>
+                <div class="wizard-actions">
+                    <button class="btn btn-skip" onclick="wizardBack()">← Back</button>
+                    <button class="btn btn-primary" onclick="wizardSubmit()">Confirm Move</button>
+                </div>
+                <div class="form-status" id="wizStatus"></div>
+            </div>
+
+            <!-- Step 2b: Human/Other — just pick destination -->
+            <div class="wizard-step" id="wizStep2Other" style="display:none">
+                <div class="wizard-prompt">Where should it go?</div>
+                <div class="wizard-field">
+                    <select id="wizRedirectFolder2"></select>
+                </div>
+                <div class="wizard-or" id="wizReverseOption" style="display:none">
+                    <span class="wizard-or-line"></span>
+                    <span class="wizard-or-text">or</span>
+                    <span class="wizard-or-line"></span>
+                </div>
+                <button class="wizard-undo-btn" id="wizUndoBtn" style="display:none" onclick="wizardSubmitReverse()">
+                    ⏪ Undo last move
+                </button>
+                <div class="wizard-actions">
+                    <button class="btn btn-skip" onclick="wizardBack()">← Back</button>
+                    <button class="btn btn-primary" onclick="wizardSubmitOther()">Confirm Move</button>
+                </div>
+                <div class="form-status" id="wizStatus2"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Panel -->
+    <div class="modal-overlay" id="settingsPanelOverlay">
+        <div class="modal settings-modal" id="settingsPanel">
+            <div class="modal-header">
+                <span class="modal-title">⚙ Settings</span>
+                <button class="modal-close" onclick="toggleSettingsPanel()">&times;</button>
+            </div>
+            <div class="settings-form">
+                <div class="form-group">
+                    <label>Onboard Date (poll emails from this date onward)</label>
+                    <input type="date" id="settingsOnboardDate">
+                    <div class="form-hint">
+                        Only emails received on or after this date will be ingested. Prevents pulling old backlog.
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Skills Engine</label>
+                    <div class="settings-toggle-row">
+                        <span style="font-size:13px;color:var(--text-muted)">Enable skill-based analysis before classification</span>
+                        <label class="toggle">
+                            <input type="checkbox" id="settingsSkillsToggle">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Developer Mode</label>
+                    <div class="settings-toggle-row">
+                        <span style="font-size:12px;color:var(--text-muted)">Show raw JSON payloads instead of human-friendly views</span>
+                        <label class="toggle">
+                            <input type="checkbox" id="settingsDevMode" onchange="toggleDevMode()">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Folder Layout</label>
+                    <div class="layout-settings">
+                        <select id="settingsTemplateSelect" onchange="applyTemplate()">
+                            <option value="alphabetical">Alphabetical (Default)</option>
+                        </select>
+                        <button class="btn btn-sm" onclick="resetAlphabetical()" style="width:100%">↻ Reset to Alphabetical</button>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-primary" onclick="saveSettings()">Save</button>
+                    <button class="btn btn-skip" onclick="toggleSettingsPanel()">Cancel</button>
+                </div>
+                <div class="form-status" id="settingsFormStatus"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Email Connection Panel -->
+    <div class="modal-overlay" id="emailPanelOverlay">
+        <div class="modal email-modal" id="emailPanel">
+            <div class="modal-header">
+                <span class="modal-title">Mail Service Connection</span>
+                <button class="modal-close" onclick="toggleEmailPanel()">&times;</button>
+            </div>
+            <div class="email-form" id="emailForm">
+                <!-- Provider selector -->
+                <div id="emailProviderSelect">
+                    <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px">Choose your mail provider:</p>
+                    <div class="provider-buttons">
+                        <button class="btn btn-provider" onclick="selectProvider('microsoft')">Microsoft 365</button>
+                        <button class="btn btn-provider" onclick="selectProvider('gmail')">Gmail</button>
+                        <button class="btn btn-provider" onclick="selectProvider('imap')">Custom IMAP</button>
+                    </div>
+                </div>
+
+                <!-- Microsoft 365 OAuth -->
+                <div id="emailMicrosoft" style="display:none">
+                    <div class="provider-label">Microsoft 365 (OAuth2)</div>
+                    <div class="form-group">
+                        <label>Application (Client) ID</label>
+                        <input type="text" id="oauthClientId" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+                    </div>
+                    <div class="form-group">
+                        <label>Directory (Tenant) ID</label>
+                        <input type="text" id="oauthTenantId" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+                    </div>
+                    <div class="form-group">
+                        <label>Client Secret</label>
+                        <input type="password" id="oauthClientSecret" placeholder="••••••••">
+                    </div>
+                    <div class="form-actions">
+                        <button class="btn btn-primary" onclick="saveOAuthConfig()">Save & Continue</button>
+                        <button class="btn btn-skip" onclick="selectProvider(null)">Back</button>
+                    </div>
+                    <div class="form-status" id="configFormStatus"></div>
+                </div>
+
+                <!-- Microsoft signed-in state -->
+                <div id="emailMsAuthenticated" style="display:none">
+                    <div class="form-status success" style="margin-bottom:12px">✓ Azure app configured.</div>
+                    <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">
+                        Click below to sign in with your Microsoft account.
+                    </p>
+                    <div class="form-actions">
+                        <button class="btn btn-primary" onclick="signInMicrosoft()">Sign in with Microsoft</button>
+                        <button class="btn btn-skip" onclick="selectProvider(null)">Back</button>
+                    </div>
+                </div>
+
+                <!-- Gmail / Custom IMAP -->
+                <div id="emailImap" style="display:none">
+                    <div class="provider-label" id="imapProviderLabel">Gmail (IMAP)</div>
+                    <div class="form-group">
+                        <label>IMAP Server</label>
+                        <input type="text" id="imapHost" value="imap.gmail.com">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Port</label>
+                            <input type="number" id="imapPort" value="993">
+                        </div>
+                        <div class="form-group">
+                            <label>SSL</label>
+                            <select id="useSsl">
+                                <option value="true" selected>Yes</option>
+                                <option value="false">No</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Email Address</label>
+                        <input type="text" id="imapUsername" placeholder="you@gmail.com">
+                    </div>
+                    <div class="form-group">
+                        <label>App Password</label>
+                        <input type="password" id="imapPassword" placeholder="16-character app password">
+                        <div style="font-size:10px;color:var(--text-dim);margin-top:4px" id="imapPasswordHint">
+                            Gmail: Enable 2FA → <a href="https://myaccount.google.com/apppasswords" target="_blank" style="color:var(--accent)">Generate App Password</a>
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button class="btn btn-primary" onclick="connectImap()">Connect</button>
+                        <button class="btn btn-skip" onclick="selectProvider(null)">Back</button>
+                    </div>
+                    <div class="form-status" id="imapFormStatus"></div>
+                </div>
+
+                <!-- Connected state (any provider) -->
+                <div id="emailConnected" style="display:none">
+                    <div class="form-status success" style="margin-bottom:12px">
+                        ✓ Mail service connected. Ready for inference.
+                    </div>
+                    <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">
+                        Signed in as <strong id="emailUserDisplay"></strong>
+                    </p>
+                    <div class="form-actions">
+                        <button class="btn btn-danger" onclick="disconnectEmail()">Sign Out</button>
+                        <button class="btn btn-skip" onclick="toggleEmailPanel()">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/dashboard.js"></script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+{
+  "event_id": "email_20260330_164531_46793",
+  "classified_at": "2026-03-30T16:45:50.752013",
+  "outcome": "Undetermined",
+  "confidence": 0.0,
+  "reasoning": "No match: The event content does not satisfy any folder's trigger rules \u2014 this is a commercial email from eBay about user agreement updates with no relation to council services.",
+  "linked_files": [
+    "email_body.txt"
+  ],
+  "file_count": 1,
+  "llm_latency_ms": 18310.0,
+  "llm_tokens_used": 7312,
+  "inference_success": true,
+  "inference_error": null,
+  "source_path": "/home/cael/.openclaw/workspace/apps/mailroom/Test_Council/receive_channel/email_20260330_164531_46793",
+  "destination_path": "/home/cael/.openclaw/workspace/apps/mailroom/Test_Council/undetermined/email_20260330_164531_46793"
+}

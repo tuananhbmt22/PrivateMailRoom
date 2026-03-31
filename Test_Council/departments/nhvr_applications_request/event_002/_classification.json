@@ -1,0 +1,19 @@
+{
+  "event_id": "event_002",
+  "classified_at": "2026-03-31T10:48:36.558929",
+  "outcome": "National Heavy Vehicle Regulator Applications Request",
+  "confidence": 1.0,
+  "reasoning": "Event contains explicit 'NHVR Portal \u2013 Consent Request' subject line and 'Council consent is requested for the above heavy vehicle movement' text matching triggers in nhvr_applications_request; exclusion check confirms this is a request (not permit issuance), so nhvr_permit_issued does not apply.",
+  "linked_files": [
+    "_history.json",
+    "email_body.txt",
+    "route_assessment.txt"
+  ],
+  "file_count": 3,
+  "llm_latency_ms": 25428.0,
+  "llm_tokens_used": 6066,
+  "inference_success": true,
+  "inference_error": null,
+  "source_path": "/home/cael/.openclaw/workspace/apps/mailroom/Test_Council/receive_channel/event_002",
+  "destination_path": "/home/cael/.openclaw/workspace/apps/mailroom/Test_Council/departments/nhvr_applications_request/event_002"
+}

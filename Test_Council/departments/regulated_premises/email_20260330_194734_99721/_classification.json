@@ -1,0 +1,18 @@
+{
+  "event_id": "email_20260330_194734_99721",
+  "classified_at": "2026-03-30T19:47:51.111767",
+  "outcome": "Regulated Premises",
+  "confidence": 0.95,
+  "reasoning": "Event contains business registration for a fast food restaurant with request for compliance documentation and food premises inspection report attachment.",
+  "linked_files": [
+    "email_body.txt",
+    "Business Registration Certificate (PDF Content).pdf"
+  ],
+  "file_count": 2,
+  "llm_latency_ms": 15913.0,
+  "llm_tokens_used": 5755,
+  "inference_success": true,
+  "inference_error": null,
+  "source_path": "/home/cael/.openclaw/workspace/apps/mailroom/Test_Council/receive_channel/email_20260330_194734_99721",
+  "destination_path": "/home/cael/.openclaw/workspace/apps/mailroom/Test_Council/departments/regulated_premises/email_20260330_194734_99721"
+}

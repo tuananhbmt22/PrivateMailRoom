@@ -1,0 +1,23 @@
+{
+  "skill_id": "companion_animals",
+  "request_type": "ownership_change",
+  "outcome": "transfer_complete",
+  "metadata": {
+    "animal_type": "dog",
+    "animal_name": "Max",
+    "breed": "Labrador",
+    "microchip_number": "900164001234567",
+    "owner_name": "[name]",
+    "owner_address": "12 Birch Road",
+    "is_desexed": true,
+    "form_type": "C3C",
+    "request_type": "ownership_change"
+  },
+  "analysis": "The event contains a complete C3C Change of Ownership form with both previous and new owner details, microchip number (900164001234567), and supporting desexing certificate. All required information for ownership transfer is present.",
+  "missing_info": [],
+  "response_template_key": "transfer_complete",
+  "suggested_folder": "companion_animals",
+  "confidence": 1.0,
+  "llm_tokens": 3392,
+  "llm_latency_ms": 37072.73429000005
+}

@@ -1,0 +1,19 @@
+{
+  "event_id": "event_005",
+  "classified_at": "2026-03-31T10:48:58.876339",
+  "outcome": "Fire Safety Services",
+  "confidence": 1.0,
+  "reasoning": "Event contains explicit 'AFS' and 'Annual Fire Safety Statement' terminology with attached AFSS certificate for commercial premises at 88 George Street, matching triggers in fire_safety_services folder.",
+  "linked_files": [
+    "_history.json",
+    "afss_certificate.txt",
+    "email_body.txt"
+  ],
+  "file_count": 3,
+  "llm_latency_ms": 22314.0,
+  "llm_tokens_used": 6028,
+  "inference_success": true,
+  "inference_error": null,
+  "source_path": "/home/cael/.openclaw/workspace/apps/mailroom/Test_Council/receive_channel/event_005",
+  "destination_path": "/home/cael/.openclaw/workspace/apps/mailroom/Test_Council/departments/fire_safety_services/event_005"
+}

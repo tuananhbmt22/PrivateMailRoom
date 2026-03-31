@@ -1,0 +1,133 @@
+{
+  "skill_id": "waste_management",
+  "skill_name": "Waste Management Operations",
+  "version": "1.0",
+  "department_key": "waste_management_operations",
+  "description": "Handles bin collection issues, bin service requests, bulk waste, and illegal dumping reports",
+
+  "matching": {
+    "keywords": ["bin", "garbage", "waste", "rubbish", "collection", "recycling", "green waste", "bulk", "dumping", "mattress"],
+    "concepts": ["waste collection service", "bin request", "missed collection", "illegal dumping", "bulk waste pickup"]
+  },
+
+  "context": {
+    "bin_types": {
+      "red_lid": "General waste (landfill) — collected weekly",
+      "yellow_lid": "Recycling (paper, cardboard, plastics, glass, metals) — collected fortnightly",
+      "green_lid": "Garden organics (green waste, food scraps where applicable) — collected fortnightly"
+    },
+    "standard_bin_size": "240L (standard residential)",
+    "collection_schedule": "Red weekly, Yellow and Green alternate fortnightly"
+  },
+
+  "request_types": {
+    "missed_collection": {
+      "description": "Resident reports their bin was not collected on the scheduled day",
+      "checks": [
+        "Which bin type was missed (red, yellow, green)?",
+        "Was the bin placed out before the collection time (typically 6 AM)?",
+        "Is this a recurring issue or first time?",
+        "Is the bin accessible (not blocked by vehicles, construction)?"
+      ],
+      "outcomes": {
+        "rebook_collection": "Valid missed collection, arrange return pickup",
+        "resident_error": "Bin was not out on time or wrong collection day",
+        "recurring_issue": "Multiple missed collections reported, escalate to operations"
+      }
+    },
+    "bin_service": {
+      "description": "Resident needs a new bin, replacement for damaged/stolen bin, or bin repair",
+      "checks": [
+        "Is this a new bin request, replacement, or repair?",
+        "Which bin type (red, yellow, green)?",
+        "What size bin is needed (140L, 240L, 360L)?",
+        "If replacement: what happened to the current bin (damaged, stolen, missing)?",
+        "Is the property address provided?"
+      ],
+      "outcomes": {
+        "new_bin": "New bin delivery request — property does not currently have this bin type",
+        "replacement_damaged": "Bin is damaged/broken and needs replacement",
+        "replacement_stolen": "Bin was stolen, needs replacement (may require police report reference)",
+        "repair": "Bin has minor damage (lid, wheels) that can be repaired on-site",
+        "additional_bin": "Request for an extra bin (additional service fee applies)",
+        "incomplete": "Missing required information (address, bin type, or issue description)"
+      }
+    },
+    "bulk_waste": {
+      "description": "Resident requesting bulk waste or mattress collection",
+      "checks": [
+        "What items need collection (furniture, mattress, appliances, general)?",
+        "Is the property address provided?",
+        "Is the resident aware of the booking requirement?",
+        "Are there any hazardous items (paint, chemicals, asbestos)?"
+      ],
+      "outcomes": {
+        "booking_confirmed": "Valid bulk waste request, can be booked",
+        "hazardous_redirect": "Contains hazardous items, redirect to chemical cleanout or specialist service",
+        "info_needed": "Missing details for booking (address, item list, preferred date)"
+      }
+    },
+    "illegal_dumping": {
+      "description": "Report of illegally dumped waste on public or private land",
+      "checks": [
+        "Is a specific location provided?",
+        "What type of waste is dumped (household, construction, hazardous)?",
+        "Is there evidence (photos)?",
+        "Is the dumping on council land or private property?",
+        "Is there any identifying information about the dumper?"
+      ],
+      "outcomes": {
+        "investigation": "Clear location and description, refer to Environmental Compliance for investigation",
+        "rid_report": "Meets criteria for RID (Report Illegal Dumping) online report",
+        "private_land": "Dumping on private property — advise landowner responsibility",
+        "insufficient_info": "Not enough detail to investigate"
+      }
+    },
+    "enquiry": {
+      "description": "General question about waste services, collection schedules, or what goes in which bin",
+      "checks": [
+        "Is this about collection schedule?",
+        "Is this about what items go in which bin?",
+        "Is this about fees or charges?"
+      ],
+      "outcomes": {
+        "schedule_info": "Provide collection schedule information",
+        "sorting_info": "Provide bin sorting guidance (what goes where)",
+        "fee_info": "Provide information about waste service fees"
+      }
+    }
+  },
+
+  "metadata_fields": {
+    "address": "Property address for the service request",
+    "bin_type": "Which bin: red_lid, yellow_lid, green_lid, or unspecified",
+    "bin_size": "Bin size if mentioned: 140L, 240L, 360L",
+    "request_type": "Determined request type from analysis",
+    "issue_description": "Brief description of the issue",
+    "is_recurring": "Whether this is a repeat issue (true/false)",
+    "location": "Location for dumping reports or collection issues",
+    "items_listed": "List of items for bulk waste collection"
+  },
+
+  "response_templates": {
+    "rebook_collection": "Thank you for reporting the missed {bin_type} bin collection at {address}. We have logged your request and a return collection will be arranged within 2 business days. Please ensure your bin remains at the kerb until collected.",
+    "resident_error": "Thank you for contacting us about your {bin_type} bin collection. Our records indicate the collection occurred as scheduled. Please ensure your bin is placed at the kerb by 6:00 AM on your collection day. Your next {bin_type} collection is scheduled for {next_collection_date}.",
+    "recurring_issue": "Thank you for reporting the ongoing missed collection issue at {address}. We have escalated this to our Waste Operations team for investigation. A supervisor will review the collection route and you will be contacted within 5 business days.",
+    "new_bin": "Thank you for your new {bin_type} bin request for {address}. Your new {bin_size} bin will be delivered within 10 business days. Please ensure clear access to your property for delivery.",
+    "replacement_damaged": "Thank you for reporting your damaged {bin_type} bin at {address}. A replacement bin will be delivered within 10 business days. Please leave the damaged bin at the kerb for collection when the new bin is delivered.",
+    "replacement_stolen": "Thank you for reporting your stolen {bin_type} bin at {address}. A replacement will be arranged within 10 business days. We recommend lodging a report with NSW Police if you haven't already.",
+    "repair": "Thank you for reporting the issue with your {bin_type} bin at {address}. A repair crew will attend within 10 business days to assess and repair the bin on-site.",
+    "additional_bin": "Thank you for your request for an additional {bin_type} bin at {address}. Additional bins attract an annual service fee. Please contact our office to confirm the fee and arrange delivery.",
+    "incomplete": "Thank you for your bin service enquiry. To process your request, we need: {missing_items}. Please reply with these details.",
+    "booking_confirmed": "Thank you for your bulk waste collection request for {address}. Your booking has been logged. Items should be placed at the kerb by 6:00 AM on your scheduled collection date. Please do not place items out more than 24 hours before collection.",
+    "hazardous_redirect": "Thank you for your enquiry. The items you've described ({items_listed}) are classified as hazardous waste and cannot be collected through the standard bulk waste service. Please visit our website for information about the next Chemical CleanOut event or contact the EPA on 131 555.",
+    "info_needed": "Thank you for your bulk waste enquiry. To book a collection, we need: {missing_items}. Please reply with these details and we'll arrange a pickup.",
+    "investigation": "Thank you for reporting illegal dumping at {location}. Your report has been referred to our Environmental Compliance team for investigation. A compliance officer will inspect the site within 5 business days.",
+    "rid_report": "Thank you for reporting illegal dumping at {location}. We recommend also lodging a report through RID Online (Report Illegal Dumping) at www.ridonline.com.au for tracking purposes. Our team will investigate.",
+    "private_land": "Thank you for your report about waste on private property at {location}. Under NSW legislation, the landowner is responsible for waste on their property. We recommend contacting the property owner directly. If the waste poses a health risk, please contact our Environmental Health team.",
+    "insufficient_info": "Thank you for your dumping report. To investigate effectively, we need: {missing_items}. If possible, please provide photos and the exact location.",
+    "schedule_info": "Thank you for your enquiry. Your waste collection schedule for {address} is: Red lid (general waste) — weekly, Yellow lid (recycling) — fortnightly, Green lid (garden organics) — fortnightly. For your specific collection days, please visit our website or contact our office.",
+    "sorting_info": "Thank you for your enquiry about bin sorting. Red lid: general household waste. Yellow lid: clean paper, cardboard, plastic containers, glass bottles, aluminium cans. Green lid: garden clippings, food scraps, and compostable materials. For a full guide, visit our website.",
+    "fee_info": "Thank you for your enquiry about waste service fees. The standard domestic waste charge is included in your annual rates. Additional bins and bulk waste collections may attract extra fees. Please contact our office for current pricing."
+  }
+}
