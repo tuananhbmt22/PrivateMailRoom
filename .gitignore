@@ -24,12 +24,15 @@ __pycache__/
 # Credentials (NEVER commit)
 config/email.yaml
 config/oauth.yaml
+config/forge.yaml
+config/external.json
 .token_cache.json
 
 # Runtime data
 _processed_uids.json
 _training_log.jsonl
 _history.json
+_forge_temp/
 
 # Kiro (local only)
 .kiro/

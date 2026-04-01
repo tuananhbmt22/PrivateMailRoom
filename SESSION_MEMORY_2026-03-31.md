@@ -75,6 +75,20 @@ AI-powered document classification system for NSW local councils. Automates emai
 - **BUG (unresolved):** Pipeline/Classification panels show raw event IDs instead of friendly subjects. Root cause: race condition between state refresh and classify dispatch — event leaves receive_channel before subject can be read. Multiple fix attempts (state pre-fetch, classify-single returning _subject) didn't reliably resolve. Replaced by Event Display Mode feature (agent-generated titles + PII redaction).
 
 ## Parked Features (Not Built Yet)
+- **Nexus Forge**: Autonomous folder learning engine — now has full wizard UI with 5-step Schema Completion Wizard. Phase 1 complete (Tasks 1-4). Phase 2 (AI analysis, folder activation) pending. Spec at `.kiro/specs/forge/`.
+- **Forge Wizard Features Built**:
+  - Create new folder via .eml upload (dev mode: JSON body extraction)
+  - Draft folders (yellow dashed, not in classification)
+  - Delete draft folders
+  - Schema Wizard Step 1: JSON schema review (PII sanitized, editable)
+  - Schema Wizard Step 2: Classification triggers (LLM-generated from description, editable chips + exclusion dropdowns)
+  - Schema Wizard Step 3: Classification JSON preview (editable, manual confirm)
+  - Schema Wizard Step 4: Document types (LLM auto-detect from source data, paired with sample files, Required/Optional + Verify/Extract modes)
+  - Schema Wizard Step 5: AI Document Analysis (placeholder)
+  - Extract mode: instruction-to-fields (write vague instruction → LLM reads actual document → generates structured fields using document's own terminology)
+  - Wizard progress persistence (`_forge_progress.json`) with resume + "Start as New"
+  - LLM response capture (`_last_llm_response.json`) for debug/retry
+  - Claude API support via `config/external.json` (gitignored)
 - **Reply drafting**: `config/reply_prompt.md` exists, `draftReply()` JS function exists, needs to use `_skill_result.json` + scroll response templates
 - **Dashboard authentication**: no login, anyone on LAN can access
 - **Audit CSV export**: councils need downloadable compliance reports

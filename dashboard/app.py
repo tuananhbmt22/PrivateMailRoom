@@ -197,6 +197,107 @@ def scan_folder_events(council_dir: Path, folder_path: str) -> list[dict[str, An
     return events
 
 
+def _save_last_llm_response(council_dir: Path, folder_key: str, endpoint: str, content: str) -> None:
+    """Save the last LLM response for debug and retry purposes."""
+    try:
+        folder_map_dir = council_dir / "departments" / folder_key
+        if not folder_map_dir.is_dir():
+            folder_map_dir = council_dir / "_forge_temp"
+        folder_map_dir.mkdir(parents=True, exist_ok=True)
+        response_path = folder_map_dir / "_last_llm_response.json"
+        response_path.write_text(json.dumps({
+            "endpoint": endpoint,
+            "timestamp": datetime.now().isoformat(),
+            "content": content,
+        }, indent=2))
+    except OSError:
+        pass
+
+
+def _parse_eml_dev_mode(eml_bytes: bytes, output_dir: Path) -> Path | None:
+    """Parse .eml in dev mode: body = JSON schema, attachments = raw files.
+
+    In dev mode, the email body is expected to be a raw JSON string
+    (e.g., NSW Planning Portal DA data). It gets saved as _source_schema.json.
+    Attachments are saved as-is alongside it.
+    """
+    import email as _email
+    import email.policy as _policy
+    import re as _re
+    from datetime import datetime as _dt
+
+    try:
+        msg = _email.message_from_bytes(eml_bytes, policy=_policy.default)
+    except Exception as exc:
+        logger.error("Dev mode: failed to parse .eml: %s", exc)
+        return None
+
+    subject = msg.get("Subject", "event")
+    timestamp = _dt.now().strftime("%Y%m%d_%H%M%S")
+    safe_subject = _re.sub(r'[^a-zA-Z0-9_-]', '_', subject.lower().strip())[:40]
+    event_id = f"forge_{safe_subject}_{timestamp}"
+
+    event_dir = output_dir / event_id
+    if event_dir.exists():
+        return None
+    event_dir.mkdir(parents=True)
+
+    # Extract body — try to parse as JSON
+    body_part = msg.get_body(preferencelist=('plain', 'html'))
+    body_text = ""
+    if body_part:
+        content = body_part.get_content()
+        if isinstance(content, bytes):
+            content = content.decode('utf-8', errors='replace')
+        # Strip HTML if needed
+        if body_part.get_content_type() == 'text/html':
+            content = _re.sub(r'<[^>]+>', ' ', content)
+            content = _re.sub(r'\s+', ' ', content).strip()
+        body_text = content.strip()
+
+    # Try to parse body as JSON
+    try:
+        schema_data = json.loads(body_text)
+        schema_path = event_dir / "_source_schema.json"
+        schema_path.write_text(json.dumps(schema_data, indent=2, ensure_ascii=False))
+        logger.info("Dev mode: saved source schema (%d keys) to %s", len(schema_data), schema_path)
+    except (json.JSONDecodeError, ValueError):
+        # Not JSON — save as regular email body
+        body_path = event_dir / "email_body.txt"
+        body_path.write_text(f"Subject: {subject}\n\n{body_text}", encoding="utf-8")
+        logger.warning("Dev mode: body is not valid JSON, saved as email_body.txt")
+
+    # Save attachments
+    for part in msg.walk():
+        cd = part.get("Content-Disposition", "")
+        if "attachment" not in cd and "inline" not in cd:
+            continue
+        filename = part.get_filename()
+        if not filename:
+            continue
+        filename = _re.sub(r'[<>:"/\\|?*\x00-\x1f]', '_', filename).strip('. ')
+        payload = part.get_payload(decode=True)
+        if not payload:
+            continue
+
+        att_path = event_dir / filename
+        counter = 1
+        while att_path.exists():
+            stem = Path(filename).stem
+            ext = Path(filename).suffix
+            att_path = event_dir / f"{stem}_{counter}{ext}"
+            counter += 1
+        att_path.write_bytes(payload)
+
+    # Save email headers
+    meta_path = event_dir / "_email_meta.txt"
+    headers = "\n".join(f"{k}: {v}" for k, v in msg.items())
+    meta_path.write_text(headers, encoding="utf-8")
+
+    logger.info("Dev mode: parsed event '%s' — %d files", event_id, len(list(event_dir.iterdir())))
+    return event_dir
+
+
 def register_routes(app: Flask) -> None:
     """Register all dashboard routes."""
 
@@ -226,6 +327,7 @@ def register_routes(app: Flask) -> None:
                 "name": folder_def.get("name", key),
                 "description": folder_def.get("description", ""),
                 "count": counts.get(key, 0),
+                "status": folder_def.get("status", "active"),
             })
 
         # Add undetermined
@@ -234,7 +336,22 @@ def register_routes(app: Flask) -> None:
             "name": "Undetermined",
             "description": tree["folders"].get("undetermined", {}).get("description", ""),
             "count": counts.get("undetermined", 0),
+            "status": "active",
         })
+
+        # Add draft folders (not in evaluation_priority)
+        active_keys = set(tree.get("evaluation_priority", []))
+        active_keys.add("undetermined")
+        active_keys.add("junk")
+        for key, folder_def in tree.get("folders", {}).items():
+            if key not in active_keys and folder_def.get("status") == "draft":
+                folders.append({
+                    "key": key,
+                    "name": folder_def.get("name", key),
+                    "description": folder_def.get("description", ""),
+                    "count": counts.get(key, 0),
+                    "status": "draft",
+                })
 
         return jsonify({
             "council": app.config["COUNCIL_NAME"],
@@ -1584,3 +1701,795 @@ def register_routes(app: Flask) -> None:
             return jsonify({"success": True})
         except (json.JSONDecodeError, OSError) as exc:
             return jsonify({"success": False, "error": str(exc)}), 500
+
+    # ── Forge Wizard Endpoints ──────────────────────────────────────────────
+
+    @app.route("/api/forge/upload", methods=["POST"])
+    def api_forge_upload():
+        """Parse uploaded .eml files into temporary event folders.
+
+        In dev mode: treats email body as raw JSON schema (_source_schema.json)
+        and saves attachments as separate files. No email_body.txt created.
+
+        In normal mode: standard .eml parsing (email_body.txt + attachments).
+        """
+        from engine.nexus.eml_parser import parse_eml_to_event
+
+        folder_name = request.form.get("folder_name", "")
+        folder_key = request.form.get("folder_key", "")
+        is_dev_mode = request.form.get("dev_mode", "false") == "true"
+
+        if not folder_name or not folder_key:
+            return jsonify({"success": False, "error": "Folder name and key are required"}), 400
+
+        files = request.files.getlist("files")
+        if not files:
+            return jsonify({"success": False, "error": "No files uploaded"}), 400
+
+        # Create temp directory for forge processing
+        forge_temp = app.config["COUNCIL_DIR"] / "_forge_temp" / folder_key
+        forge_temp.mkdir(parents=True, exist_ok=True)
+
+        parsed_events = []
+        for f in files:
+            eml_bytes = f.read()
+
+            if is_dev_mode:
+                # Dev mode: parse body as JSON schema + raw attachments
+                event_dir = _parse_eml_dev_mode(eml_bytes, forge_temp)
+            else:
+                event_dir = parse_eml_to_event(eml_bytes, forge_temp)
+
+            if event_dir:
+                # Build display info
+                schema_path = event_dir / "_source_schema.json"
+                body_path = event_dir / "email_body.txt"
+
+                subject = ""
+                sender = ""
+                source_schema = None
+
+                if schema_path.is_file():
+                    # Dev mode — read schema for display
+                    try:
+                        schema_data = json.loads(schema_path.read_text())
+                        source_schema = schema_data
+                        # Try to extract a meaningful title from the schema
+                        subject = schema_data.get("developmentDescription", "")
+                        if not subject:
+                            subject = schema_data.get("applicationType", "")
+                        sender = schema_data.get("applicant", {}).get("applicantPerson", {}).get("email", "")
+                    except (json.JSONDecodeError, OSError):
+                        pass
+
+                if not subject:
+                    display = extract_event_display(event_dir)
+                    subject = display["subject"]
+                    sender = display["sender"]
+
+                attachments = [
+                    af.name for af in sorted(event_dir.iterdir())
+                    if af.is_file() and not af.name.startswith("_") and af.name != "email_body.txt"
+                ]
+
+                event_info = {
+                    "event_id": event_dir.name,
+                    "subject": subject or "(No Subject)",
+                    "sender": sender,
+                    "file_count": len(list(event_dir.iterdir())),
+                    "attachments": attachments,
+                    "dev_mode": is_dev_mode,
+                    "has_source_schema": schema_path.is_file(),
+                }
+
+                # In dev mode, include schema field count for display
+                if source_schema:
+                    top_level_keys = [k for k in source_schema.keys() if not k.startswith("_")]
+                    event_info["schema_fields"] = len(top_level_keys)
+                    event_info["application_type"] = source_schema.get("applicationType", "")
+                    event_info["council_ref"] = source_schema.get("councilDANumber", "")
+
+                parsed_events.append(event_info)
+
+        return jsonify({
+            "success": True,
+            "events": parsed_events,
+            "folder_key": folder_key,
+            "dev_mode": is_dev_mode,
+        })
+
+    @app.route("/api/forge/run", methods=["POST"])
+    def api_forge_run():
+        """Run the Forge pipeline (Job 1 + Job 2) on uploaded events."""
+        from engine.nexus.claude_client import ClaudeConfig
+        from engine.nexus.forge import run_forge
+
+        data = request.get_json() or {}
+        folder_name = data.get("folder_name", "")
+        folder_key = data.get("folder_key", "")
+
+        if not folder_name or not folder_key:
+            return jsonify({"success": False, "error": "Folder name and key required"}), 400
+
+        # Load Claude config from external.json
+        config = ClaudeConfig.from_external(CONFIG_DIR)
+        if not config or not config.is_configured:
+            return jsonify({
+                "success": False,
+                "error": "Claude API key not configured. Set it in config/external.json",
+            }), 400
+
+        # Find parsed event directories
+        forge_temp = app.config["COUNCIL_DIR"] / "_forge_temp" / folder_key
+        if not forge_temp.is_dir():
+            return jsonify({"success": False, "error": "No uploaded events found. Upload events first."}), 400
+
+        event_dirs = sorted([
+            d for d in forge_temp.iterdir()
+            if d.is_dir() and not d.name.startswith(".")
+        ])
+
+        if not event_dirs:
+            return jsonify({"success": False, "error": "No event directories found"}), 400
+
+        # Run Forge
+        result = run_forge(
+            config=config,
+            folder_name=folder_name,
+            folder_key=folder_key,
+            event_dirs=event_dirs,
+        )
+
+        return jsonify({
+            "success": len(result.event_blueprints) > 0,
+            "folder_key": result.folder_key,
+            "folder_name": result.folder_name,
+            "event_blueprints": result.event_blueprints,
+            "classification_entry": result.classification_entry,
+            "scroll_json": result.scroll_json,
+            "errors": result.errors,
+        })
+
+    @app.route("/api/forge/save", methods=["POST"])
+    def api_forge_save():
+        """Create a draft folder skeleton from Forge wizard.
+
+        Creates the physical folder, generates {folder_key}.json from source schema,
+        adds to classification tree as status=draft, and moves sample files.
+        """
+        from engine.nexus.folder_schema import build_folder_schema, save_folder_schema
+
+        data = request.get_json() or {}
+        folder_key = data.get("folder_key", "")
+        folder_name = data.get("folder_name", "")
+        folder_desc = data.get("description", "")
+        external_id = data.get("external_id", "")
+
+        if not folder_key or not folder_name:
+            return jsonify({"success": False, "error": "Folder name and key required"}), 400
+
+        council_dir = app.config["COUNCIL_DIR"]
+        folder_map = app.config["COUNCIL_CONFIG"].get("folder_map", {})
+
+        if folder_key in folder_map:
+            return jsonify({"success": False, "error": f"Folder '{folder_key}' already exists"}), 409
+
+        # 1. Create physical folder
+        dept_path = f"departments/{folder_key}"
+        physical_dir = council_dir / dept_path
+        physical_dir.mkdir(parents=True, exist_ok=True)
+
+        # 2. Move temp events to _forge_samples
+        samples_dir = physical_dir / "_forge_samples"
+        samples_dir.mkdir(exist_ok=True)
+
+        source_schema = None
+        forge_temp = council_dir / "_forge_temp" / folder_key
+        if forge_temp.is_dir():
+            import shutil
+            for event_dir in forge_temp.iterdir():
+                if event_dir.is_dir():
+                    # Look for source schema in the event
+                    schema_path = event_dir / "_source_schema.json"
+                    if schema_path.is_file() and source_schema is None:
+                        try:
+                            source_schema = json.loads(schema_path.read_text())
+                        except (json.JSONDecodeError, OSError):
+                            pass
+                    dest = samples_dir / event_dir.name
+                    shutil.copytree(event_dir, dest)
+            shutil.rmtree(forge_temp, ignore_errors=True)
+
+        # 3. Build and save {folder_key}.json
+        folder_schema = build_folder_schema(
+            folder_key=folder_key,
+            folder_name=folder_name,
+            description=folder_desc,
+            external_id=external_id,
+            source_schema=source_schema,
+        )
+        save_folder_schema(physical_dir, folder_key, folder_schema)
+
+        # 4. Add to classification tree as DRAFT
+        tree_path = CONFIG_DIR / "classification_only_tree.json"
+        tree = json.loads(tree_path.read_text())
+        tree["folders"][folder_key] = {
+            "name": folder_name,
+            "description": folder_desc or f"Draft folder — created by Forge",
+            "triggers": [],
+            "exclusions": [],
+            "status": "draft",
+        }
+        if external_id:
+            tree["folders"][folder_key]["external_id"] = external_id
+        tree_path.write_text(json.dumps(tree, indent=2))
+
+        # 5. Update council.yaml
+        council_yaml_path = council_dir / "council.yaml"
+        with open(council_yaml_path, "r") as f:
+            council_config = yaml.safe_load(f)
+        council_config.setdefault("folder_map", {})[folder_key] = dept_path
+        with open(council_yaml_path, "w") as f:
+            yaml.dump(council_config, f, default_flow_style=False, sort_keys=False)
+
+        # 6. Update in-memory configs
+        app.config["COUNCIL_CONFIG"]["folder_map"][folder_key] = dept_path
+        with open(tree_path, "r") as f:
+            app.config["FOLDER_TREE"] = json.load(f)
+
+        doc_count = len(folder_schema.get("documents", []))
+        logger.info("Forge: created draft folder '%s' with %d document types", folder_name, doc_count)
+
+        return jsonify({
+            "success": True,
+            "folder_key": folder_key,
+            "folder_name": folder_name,
+            "status": "draft",
+            "document_count": doc_count,
+        })
+
+    @app.route("/api/forge/status")
+    def api_forge_status():
+        """Check if Forge is available (Claude API configured)."""
+        from engine.nexus.claude_client import ClaudeConfig
+        config = ClaudeConfig.from_external(CONFIG_DIR)
+        return jsonify({
+            "available": config is not None and config.is_configured,
+            "model": config.model if config else None,
+        })
+
+    # ── Schema Completion Wizard Endpoints ──────────────────────────────────
+
+    @app.route("/api/forge/schema/<folder_key>")
+    def api_forge_schema(folder_key: str):
+        """Load the folder schema for the Schema Completion Wizard.
+
+        Reads {folder_key}.json — the single source of truth.
+        Source schema inside is already PII-sanitized from creation time.
+        """
+        from engine.nexus.folder_schema import load_folder_schema
+
+        council_dir = app.config["COUNCIL_DIR"]
+        folder_map = app.config["COUNCIL_CONFIG"].get("folder_map", {})
+        relative_path = folder_map.get(folder_key)
+        if not relative_path:
+            return jsonify({"error": "Folder not found"}), 404
+
+        folder_dir = council_dir / relative_path
+        schema = load_folder_schema(folder_dir, folder_key)
+
+        if not schema:
+            return jsonify({"error": f"No {folder_key}.json found in folder"}), 404
+
+        # List physical sample files
+        files_on_disk = []
+        samples_dir = folder_dir / "_forge_samples"
+        if samples_dir.is_dir():
+            for event_dir in sorted(samples_dir.iterdir()):
+                if not event_dir.is_dir():
+                    continue
+                for f in sorted(event_dir.iterdir()):
+                    if f.is_file() and not f.name.startswith("_") and f.name != "email_body.txt":
+                        files_on_disk.append({
+                            "filename": f.name,
+                            "size_bytes": f.stat().st_size,
+                        })
+
+        return jsonify({
+            "folder_key": folder_key,
+            "schema": schema,
+            "documents": schema.get("documents", []),
+            "files_on_disk": files_on_disk,
+        })
+
+    @app.route("/api/forge/schema/<folder_key>/save", methods=["POST"])
+    def api_forge_schema_save(folder_key: str):
+        """Save the edited folder schema JSON."""
+        from engine.nexus.folder_schema import save_folder_schema
+
+        council_dir = app.config["COUNCIL_DIR"]
+        folder_map = app.config["COUNCIL_CONFIG"].get("folder_map", {})
+        relative_path = folder_map.get(folder_key)
+        if not relative_path:
+            return jsonify({"error": "Folder not found"}), 404
+
+        data = request.get_json() or {}
+        schema = data.get("schema")
+        if not schema:
+            return jsonify({"error": "No schema provided"}), 400
+
+        folder_dir = council_dir / relative_path
+        save_folder_schema(folder_dir, folder_key, schema)
+
+        logger.info("Schema wizard: saved schema for '%s'", folder_key)
+        return jsonify({"success": True})
+
+    @app.route("/api/forge/documents/<folder_key>/save", methods=["POST"])
+    def api_forge_documents_save(folder_key: str):
+        """Save document requirement flags back into {folder_key}.json."""
+        from engine.nexus.folder_schema import load_folder_schema, save_folder_schema
+
+        council_dir = app.config["COUNCIL_DIR"]
+        folder_map = app.config["COUNCIL_CONFIG"].get("folder_map", {})
+        relative_path = folder_map.get(folder_key)
+        if not relative_path:
+            return jsonify({"error": "Folder not found"}), 404
+
+        data = request.get_json() or {}
+        documents = data.get("documents")
+        if not documents:
+            return jsonify({"error": "No documents provided"}), 400
+
+        folder_dir = council_dir / relative_path
+        schema = load_folder_schema(folder_dir, folder_key)
+        if not schema:
+            return jsonify({"error": "Folder schema not found"}), 404
+
+        # Update documents array in the schema
+        schema["documents"] = documents
+        save_folder_schema(folder_dir, folder_key, schema)
+
+        logger.info("Schema wizard: saved %d document requirements for '%s'", len(documents), folder_key)
+        return jsonify({"success": True, "count": len(documents)})
+
+    @app.route("/api/forge/delete/<folder_key>", methods=["POST"])
+    def api_forge_delete(folder_key: str):
+        """Delete a draft folder completely — physical folder, tree entry, council.yaml."""
+        import shutil
+
+        council_dir = app.config["COUNCIL_DIR"]
+        folder_map = app.config["COUNCIL_CONFIG"].get("folder_map", {})
+        tree = app.config["FOLDER_TREE"]
+
+        # Only allow deleting draft folders
+        folder_def = tree.get("folders", {}).get(folder_key)
+        if not folder_def:
+            return jsonify({"success": False, "error": "Folder not found"}), 404
+        if folder_def.get("status") != "draft":
+            return jsonify({"success": False, "error": "Only draft folders can be deleted"}), 400
+
+        relative_path = folder_map.get(folder_key)
+
+        # 1. Remove physical folder
+        if relative_path:
+            physical_dir = council_dir / relative_path
+            if physical_dir.is_dir():
+                shutil.rmtree(physical_dir, ignore_errors=True)
+                logger.info("Forge delete: removed %s", physical_dir)
+
+        # 2. Remove from classification tree
+        tree_path = CONFIG_DIR / "classification_only_tree.json"
+        tree_data = json.loads(tree_path.read_text())
+        tree_data["folders"].pop(folder_key, None)
+        if folder_key in tree_data.get("evaluation_priority", []):
+            tree_data["evaluation_priority"].remove(folder_key)
+        tree_path.write_text(json.dumps(tree_data, indent=2))
+
+        # 3. Remove from council.yaml
+        council_yaml_path = council_dir / "council.yaml"
+        with open(council_yaml_path, "r") as f:
+            council_config = yaml.safe_load(f)
+        council_config.get("folder_map", {}).pop(folder_key, None)
+        with open(council_yaml_path, "w") as f:
+            yaml.dump(council_config, f, default_flow_style=False, sort_keys=False)
+
+        # 4. Update in-memory configs
+        app.config["COUNCIL_CONFIG"]["folder_map"].pop(folder_key, None)
+        with open(tree_path, "r") as f:
+            app.config["FOLDER_TREE"] = json.load(f)
+
+        # 5. Clean up any forge temp
+        forge_temp = council_dir / "_forge_temp" / folder_key
+        if forge_temp.is_dir():
+            shutil.rmtree(forge_temp, ignore_errors=True)
+
+        logger.info("Forge delete: removed draft folder '%s'", folder_key)
+        return jsonify({"success": True, "folder_key": folder_key})
+
+    @app.route("/api/forge/generate-triggers", methods=["POST"])
+    def api_forge_generate_triggers():
+        """Generate classification triggers using the local LLM.
+
+        Takes folder name + description, returns suggested triggers and exclusions.
+        """
+        from engine.nexus.prompts import TRIGGER_GEN_SYSTEM_PROMPT, build_trigger_gen_message
+        from engine.llm import LLMConfig, LocalLLM
+
+        data = request.get_json() or {}
+        folder_name = data.get("folder_name", "")
+        description = data.get("description", "")
+
+        if not folder_name or not description:
+            return jsonify({"error": "Folder name and description required"}), 400
+
+        llm_config = LLMConfig.from_yaml(CONFIG_DIR / "llm.yaml")
+        llm = LocalLLM(llm_config)
+
+        user_message = build_trigger_gen_message(folder_name, description)
+        response = llm.infer(
+            TRIGGER_GEN_SYSTEM_PROMPT,
+            user_message,
+            use_json_schema=False,
+            max_tokens_override=512,
+        )
+        llm.close()
+
+        if not response.success:
+            return jsonify({"error": f"LLM failed: {response.error}"}), 500
+
+        # Save last LLM response for debug/retry
+        _save_last_llm_response(app.config["COUNCIL_DIR"], "forge", "generate_triggers", response.content)
+
+        # Parse response — extract first JSON object, ignore trailing text
+        content = response.content.strip()
+
+        # Strip markdown code fences
+        if "```" in content:
+            import re as _re
+            # Find content between first ``` and next ```
+            fence_match = _re.search(r"```(?:json)?\s*(\{[\s\S]*?\})\s*```", content)
+            if fence_match:
+                content = fence_match.group(1)
+            else:
+                content = _re.sub(r"^```(?:json)?\s*", "", content)
+                content = _re.sub(r"\s*```[\s\S]*$", "", content)
+
+        # Extract first complete JSON object
+        brace_count = 0
+        start_idx = -1
+        for i, ch in enumerate(content):
+            if ch == '{':
+                if start_idx == -1:
+                    start_idx = i
+                brace_count += 1
+            elif ch == '}':
+                brace_count -= 1
+                if brace_count == 0 and start_idx >= 0:
+                    content = content[start_idx:i + 1]
+                    break
+
+        try:
+            result = json.loads(content)
+        except json.JSONDecodeError:
+            return jsonify({
+                "triggers": [],
+                "exclusions": [],
+                "raw": response.content[:500],
+                "error": "Failed to parse LLM response as JSON",
+            })
+
+        return jsonify({
+            "triggers": result.get("triggers", []),
+            "exclusions": result.get("exclusions", []),
+            "latency_ms": round(response.latency_ms),
+            "tokens": response.tokens_used,
+        })
+
+    @app.route("/api/forge/save-classification/<folder_key>", methods=["POST"])
+    def api_forge_save_classification(folder_key: str):
+        """Save classification triggers and exclusions for a draft folder.
+
+        Saves to both the classification tree AND _forge_progress.json for wizard resumption.
+        """
+        data = request.get_json() or {}
+        triggers = data.get("triggers", [])
+        exclusions = data.get("exclusions", [])
+        description = data.get("description", "")
+        step = data.get("step", 3)
+
+        # Update classification tree
+        tree_path = CONFIG_DIR / "classification_only_tree.json"
+        tree = json.loads(tree_path.read_text())
+
+        folder_def = tree.get("folders", {}).get(folder_key)
+        if not folder_def:
+            return jsonify({"error": "Folder not found in classification tree"}), 404
+
+        folder_def["triggers"] = triggers
+        folder_def["exclusions"] = exclusions
+        folder_def["status"] = folder_def.get("status", "draft")
+        if description:
+            folder_def["description"] = description
+
+        tree_path.write_text(json.dumps(tree, indent=2))
+        with open(tree_path, "r") as f:
+            app.config["FOLDER_TREE"] = json.load(f)
+
+        # Save forge progress for wizard resumption
+        council_dir = app.config["COUNCIL_DIR"]
+        folder_map = app.config["COUNCIL_CONFIG"].get("folder_map", {})
+        relative_path = folder_map.get(folder_key)
+        if relative_path:
+            folder_dir = council_dir / relative_path
+            progress_path = folder_dir / "_forge_progress.json"
+
+            progress = {}
+            if progress_path.is_file():
+                try:
+                    progress = json.loads(progress_path.read_text())
+                except (json.JSONDecodeError, OSError):
+                    pass
+
+            completed = set(progress.get("completed_steps", []))
+            completed.add(step)
+            progress["completed_steps"] = sorted(completed)
+            progress["last_step"] = step
+            progress["classification_draft"] = {
+                "name": folder_def.get("name", ""),
+                "description": description,
+                "triggers": triggers,
+                "exclusions": exclusions,
+                "status": "draft",
+            }
+            progress["updated_at"] = datetime.now().isoformat()
+
+            progress_path.write_text(json.dumps(progress, indent=2))
+
+        logger.info("Forge: saved %d triggers + %d exclusions for '%s'", len(triggers), len(exclusions), folder_key)
+        return jsonify({"success": True, "triggers": len(triggers), "exclusions": len(exclusions)})
+
+    @app.route("/api/forge/progress/<folder_key>")
+    def api_forge_progress(folder_key: str):
+        """Load forge wizard progress for resumption."""
+        council_dir = app.config["COUNCIL_DIR"]
+        folder_map = app.config["COUNCIL_CONFIG"].get("folder_map", {})
+        relative_path = folder_map.get(folder_key)
+        if not relative_path:
+            return jsonify({"error": "Folder not found"}), 404
+
+        folder_dir = council_dir / relative_path
+        progress_path = folder_dir / "_forge_progress.json"
+
+        if not progress_path.is_file():
+            return jsonify({"completed_steps": [], "last_step": 0})
+
+        try:
+            progress = json.loads(progress_path.read_text())
+            return jsonify(progress)
+        except (json.JSONDecodeError, OSError):
+            return jsonify({"completed_steps": [], "last_step": 0})
+
+    @app.route("/api/forge/progress/<folder_key>/reset", methods=["POST"])
+    def api_forge_progress_reset(folder_key: str):
+        """Reset forge wizard progress — start as new."""
+        council_dir = app.config["COUNCIL_DIR"]
+        folder_map = app.config["COUNCIL_CONFIG"].get("folder_map", {})
+        relative_path = folder_map.get(folder_key)
+        if not relative_path:
+            return jsonify({"error": "Folder not found"}), 404
+
+        folder_dir = council_dir / relative_path
+        progress_path = folder_dir / "_forge_progress.json"
+        if progress_path.is_file():
+            progress_path.unlink()
+
+        return jsonify({"success": True})
+
+    @app.route("/api/forge/extract-doc-types/<folder_key>", methods=["POST"])
+    def api_forge_extract_doc_types(folder_key: str):
+        """Extract document types from source data using local LLM.
+
+        Reads the raw source text + filenames, sends to LLM,
+        returns paired document types with matched files.
+        """
+        import re as _re
+        from engine.nexus.prompts import DOC_TYPE_SYSTEM_PROMPT, build_doc_type_message
+        from engine.llm import LLMConfig, LocalLLM
+
+        council_dir = app.config["COUNCIL_DIR"]
+        folder_map = app.config["COUNCIL_CONFIG"].get("folder_map", {})
+        relative_path = folder_map.get(folder_key)
+        if not relative_path:
+            return jsonify({"error": "Folder not found"}), 404
+
+        folder_dir = council_dir / relative_path
+        samples_dir = folder_dir / "_forge_samples"
+
+        # Collect raw text and filenames from samples
+        raw_text = ""
+        filenames = []
+
+        if samples_dir.is_dir():
+            for event_dir in sorted(samples_dir.iterdir()):
+                if not event_dir.is_dir():
+                    continue
+                # Try source schema first
+                schema_path = event_dir / "_source_schema.json"
+                if schema_path.is_file():
+                    raw_text = schema_path.read_text(errors="replace")
+                else:
+                    body_path = event_dir / "email_body.txt"
+                    if body_path.is_file():
+                        raw_text = body_path.read_text(errors="replace")
+
+                # Collect filenames
+                for f in sorted(event_dir.iterdir()):
+                    if f.is_file() and not f.name.startswith("_") and f.name != "email_body.txt":
+                        filenames.append(f.name)
+                break  # Only process first event
+
+        if not raw_text and not filenames:
+            return jsonify({"error": "No source data found"}), 404
+
+        # Call local LLM
+        llm_config = LLMConfig.from_yaml(CONFIG_DIR / "llm.yaml")
+        llm = LocalLLM(llm_config)
+
+        user_message = build_doc_type_message(raw_text, filenames)
+        response = llm.infer(
+            DOC_TYPE_SYSTEM_PROMPT,
+            user_message,
+            use_json_schema=False,
+            max_tokens_override=2048,
+        )
+        llm.close()
+
+        if not response.success:
+            return jsonify({"error": f"LLM failed: {response.error}"}), 500
+
+        # Save last LLM response for debug/retry
+        _save_last_llm_response(council_dir, folder_key, "extract_doc_types", response.content)
+
+        # Parse response — extract first JSON object
+        content = response.content.strip()
+        if "```" in content:
+            fence_match = _re.search(r"```(?:json)?\s*(\{[\s\S]*?\})\s*```", content)
+            if fence_match:
+                content = fence_match.group(1)
+
+        brace_count = 0
+        start_idx = -1
+        for i, ch in enumerate(content):
+            if ch == '{':
+                if start_idx == -1:
+                    start_idx = i
+                brace_count += 1
+            elif ch == '}':
+                brace_count -= 1
+                if brace_count == 0 and start_idx >= 0:
+                    content = content[start_idx:i + 1]
+                    break
+
+        try:
+            result = json.loads(content)
+        except json.JSONDecodeError:
+            return jsonify({
+                "document_types": [],
+                "unmatched_files": filenames,
+                "error": "Failed to parse LLM response",
+                "raw": response.content[:500],
+            })
+
+        return jsonify({
+            "document_types": result.get("document_types", []),
+            "unmatched_files": result.get("unmatched_files", []),
+            "latency_ms": round(response.latency_ms),
+            "tokens": response.tokens_used,
+        })
+
+    @app.route("/api/forge/generate-fields", methods=["POST"])
+    def api_forge_generate_fields():
+        """Generate extraction fields from instruction + actual document content."""
+        import re as _re
+        from engine.nexus.prompts import FIELD_GEN_SYSTEM_PROMPT, build_field_gen_message
+        from engine.llm import LLMConfig, LocalLLM
+
+        data = request.get_json() or {}
+        document_type = data.get("document_type", "")
+        instruction = data.get("instruction", "")
+        filename = data.get("filename", "")
+        folder_key = data.get("folder_key", "")
+
+        if not document_type or not instruction:
+            return jsonify({"error": "Document type and instruction required"}), 400
+
+        # Try to read the actual document content from _forge_samples
+        document_content = ""
+        if folder_key and filename:
+            council_dir = app.config["COUNCIL_DIR"]
+            folder_map = app.config["COUNCIL_CONFIG"].get("folder_map", {})
+            relative_path = folder_map.get(folder_key)
+            if relative_path:
+                samples_dir = council_dir / relative_path / "_forge_samples"
+                if samples_dir.is_dir():
+                    for event_dir in samples_dir.iterdir():
+                        if not event_dir.is_dir():
+                            continue
+                        file_path = event_dir / filename
+                        if file_path.is_file():
+                            ext = file_path.suffix.lower()
+                            if ext in {".txt", ".csv", ".md", ".html", ".htm", ".json"}:
+                                try:
+                                    document_content = file_path.read_text(errors="replace")
+                                except OSError:
+                                    pass
+                            elif ext == ".pdf":
+                                # Try to extract text from PDF
+                                try:
+                                    import subprocess
+                                    result = subprocess.run(
+                                        ["pdftotext", "-layout", str(file_path), "-"],
+                                        capture_output=True, text=True, timeout=10,
+                                    )
+                                    if result.returncode == 0:
+                                        document_content = result.stdout
+                                except (FileNotFoundError, subprocess.TimeoutExpired):
+                                    document_content = f"[PDF file: {filename} — text extraction not available]"
+                            break
+
+        llm_config = LLMConfig.from_yaml(CONFIG_DIR / "llm.yaml")
+        llm = LocalLLM(llm_config)
+
+        user_message = build_field_gen_message(document_type, instruction, document_content)
+        response = llm.infer(
+            FIELD_GEN_SYSTEM_PROMPT,
+            user_message,
+            use_json_schema=False,
+            max_tokens_override=1024,
+        )
+        llm.close()
+
+        if not response.success:
+            return jsonify({"error": f"LLM failed: {response.error}"}), 500
+
+        # Save last LLM response
+        folder_key_for_save = data.get("folder_key", "forge")
+        _save_last_llm_response(app.config["COUNCIL_DIR"], folder_key_for_save, "generate_fields", response.content)
+
+        # Parse response — extract JSON array
+        content = response.content.strip()
+        if "```" in content:
+            fence_match = _re.search(r"```(?:json)?\s*(\[[\s\S]*?\])\s*```", content)
+            if fence_match:
+                content = fence_match.group(1)
+
+        # Find first [ ... ] array
+        bracket_count = 0
+        start_idx = -1
+        for i, ch in enumerate(content):
+            if ch == '[':
+                if start_idx == -1:
+                    start_idx = i
+                bracket_count += 1
+            elif ch == ']':
+                bracket_count -= 1
+                if bracket_count == 0 and start_idx >= 0:
+                    content = content[start_idx:i + 1]
+                    break
+
+        try:
+            fields = json.loads(content)
+            if not isinstance(fields, list):
+                fields = []
+        except json.JSONDecodeError:
+            return jsonify({
+                "fields": [],
+                "error": "Failed to parse LLM response",
+                "raw": response.content[:500],
+            })
+
+        return jsonify({
+            "fields": fields,
+            "latency_ms": round(response.latency_ms),
+            "tokens": response.tokens_used,
+        })

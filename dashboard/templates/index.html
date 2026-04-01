@@ -56,6 +56,8 @@
             </div>
         </aside>
 
+        <div class="resize-handle resize-handle-x" id="resizeSidebar"></div>
+
         <!-- Main content: Receiver → Folder grid + Activity -->
         <main class="main">
             <!-- Radial folder map with receiver at center -->
@@ -76,10 +78,12 @@
                 </div>
             </section>
 
+            <div class="resize-handle resize-handle-y" id="resizeActivity"></div>
+
             <!-- Activity panel -->
-            <section class="activity-panel">
+            <section class="activity-panel" id="activityPanel">
                 <!-- Polling Service -->
-                <div class="service-column">
+                <div class="service-column" id="colPoll">
                     <div class="service-header">
                         <span class="service-header-icon">📧</span>
                         <span>Polling Service</span>
@@ -91,8 +95,10 @@
                     </div>
                 </div>
 
+                <div class="resize-handle resize-handle-col" data-left="colPoll" data-right="colPipeline"></div>
+
                 <!-- AI Pipeline -->
-                <div class="service-column">
+                <div class="service-column" id="colPipeline">
                     <div class="service-header">
                         <span class="service-header-icon">🧠</span>
                         <span>AI Pipeline</span>
@@ -104,8 +110,10 @@
                     </div>
                 </div>
 
+                <div class="resize-handle resize-handle-col" data-left="colPipeline" data-right="colClassify"></div>
+
                 <!-- Classification Service -->
-                <div class="service-column">
+                <div class="service-column" id="colClassify">
                     <div class="service-header">
                         <span class="service-header-icon">📂</span>
                         <span>Classification</span>
@@ -117,8 +125,10 @@
                     </div>
                 </div>
 
+                <div class="resize-handle resize-handle-col" data-left="colClassify" data-right="colResults"></div>
+
                 <!-- Results Log -->
-                <div class="service-column">
+                <div class="service-column" id="colResults">
                     <div class="service-header">
                         <span class="service-header-icon">📋</span>
                         <span>Results</span>
@@ -277,6 +287,11 @@
                     </div>
                 </div>
                 <div class="form-group">
+                    <label>Folder Forge</label>
+                    <button class="btn btn-sm" onclick="toggleSettingsPanel(); openForge()" style="width:100%;padding:10px;font-size:13px;border-color:rgba(245,158,11,0.3);color:var(--amber)">🔨 Create New Folder Schema</button>
+                    <div class="form-hint">Use AI to auto-generate classification rules and skill scrolls from sample emails</div>
+                </div>
+                <div class="form-group">
                     <label>Folder Layout</label>
                     <div class="layout-settings">
                         <select id="settingsTemplateSelect" onchange="applyTemplate()">
@@ -402,5 +417,218 @@
     </div>
 
     <script src="/static/js/dashboard.js"></script>
+
+    <!-- Schema Completion Wizard -->
+    <div class="modal-overlay" id="schemaWizardOverlay">
+        <div class="modal forge-modal" style="width:700px">
+            <div class="modal-header">
+                <span class="modal-title" id="schemaWizardTitle">📋 Complete Folder Schema</span>
+                <button class="modal-close" onclick="closeSchemaWizard()">&times;</button>
+            </div>
+
+            <!-- Schema Step 1: JSON Review -->
+            <div class="forge-step" id="schemaStep1">
+                <div class="forge-step-header">
+                    <span class="forge-step-num">1</span>
+                    <span>Review JSON Schema</span>
+                </div>
+                <div class="forge-body">
+                    <p style="font-size:11px;color:var(--text-muted);margin-bottom:8px">
+                        Sensitive data has been redacted. Review and edit the schema below.
+                    </p>
+                    <textarea id="schemaJsonEditor" rows="20" style="width:100%;padding:10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:'SF Mono','Fira Code',monospace;font-size:11px;resize:vertical;line-height:1.5"></textarea>
+                    <div class="forge-actions">
+                        <button class="btn btn-skip" onclick="closeSchemaWizard()">Cancel</button>
+                        <button class="btn btn-primary" onclick="schemaConfirmJson()">Confirm Schema →</button>
+                    </div>
+                    <div class="form-status" id="schemaStep1Status"></div>
+                </div>
+            </div>
+
+            <!-- Schema Step 2: Classification Triggers -->
+            <div class="forge-step" id="schemaStep2" style="display:none">
+                <div class="forge-step-header">
+                    <span class="forge-step-num">2</span>
+                    <span>Classification Triggers</span>
+                </div>
+                <div class="forge-body">
+                    <div class="form-group">
+                        <label>Folder Description</label>
+                        <textarea id="schemaFolderDesc" rows="3" placeholder="Describe what this folder handles in 1-2 sentences. Example: This folder relates to waste management, including illegal dumping reports, bin replacement requests, and collection enquiries." style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;resize:vertical"></textarea>
+                    </div>
+                    <button class="btn btn-sm" onclick="generateTriggers()" id="genTriggersBtn" style="margin-bottom:12px;border-color:rgba(34,197,94,0.3);color:var(--green)">🤖 Generate Triggers</button>
+                    <div class="form-status" id="triggerGenStatus"></div>
+                    <div id="triggerCards" style="margin-top:12px"></div>
+                    <div id="exclusionCards" style="margin-top:12px"></div>
+                    <div class="forge-actions">
+                        <button class="btn btn-skip" onclick="schemaShowStep(1)">← Back</button>
+                        <button class="btn btn-primary" onclick="saveTriggers()">Save Triggers →</button>
+                    </div>
+                    <div class="form-status" id="triggerSaveStatus"></div>
+                </div>
+            </div>
+
+            <!-- Schema Step 3: Classification JSON Preview -->
+            <div class="forge-step" id="schemaStep3" style="display:none">
+                <div class="forge-step-header">
+                    <span class="forge-step-num">3</span>
+                    <span>Review Classification JSON</span>
+                </div>
+                <div class="forge-body">
+                    <p style="font-size:11px;color:var(--text-muted);margin-bottom:8px">
+                        This is the classification tree entry that will be used for routing emails. Review and edit if needed.
+                    </p>
+                    <textarea id="classificationJsonEditor" rows="16" style="width:100%;padding:10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:'SF Mono','Fira Code',monospace;font-size:11px;resize:vertical;line-height:1.5"></textarea>
+                    <div class="forge-actions">
+                        <button class="btn btn-skip" onclick="schemaShowStep(2)">← Back</button>
+                        <button class="btn btn-primary" onclick="saveClassificationJson()">Confirm & Save →</button>
+                    </div>
+                    <div class="form-status" id="schemaStep3Status"></div>
+                </div>
+            </div>
+
+            <!-- Schema Step 4: Document Requirements -->
+            <div class="forge-step" id="schemaStep4" style="display:none">
+                <div class="forge-step-header">
+                    <span class="forge-step-num">4</span>
+                    <span>Document Types</span>
+                </div>
+                <div class="forge-body">
+                    <p style="font-size:11px;color:var(--text-muted);margin-bottom:8px">
+                        Document types and their sample files. Edit labels, toggle Required/Optional, or add/remove types.
+                    </p>
+                    <button class="btn btn-sm" onclick="extractDocTypes()" id="extractDocTypesBtn" style="margin-bottom:12px;border-color:rgba(34,197,94,0.3);color:var(--green)">🤖 Auto-detect Document Types</button>
+                    <div class="form-status" id="docTypeGenStatus"></div>
+                    <div class="schema-doc-list" id="schemaDocList"></div>
+                    <div style="margin-top:8px">
+                        <button class="btn btn-sm" onclick="addNewDocType()" style="border-style:dashed;width:100%">+ Add Document Type</button>
+                    </div>
+                    <div class="forge-actions">
+                        <button class="btn btn-skip" onclick="schemaShowStep(3)">← Back</button>
+                        <button class="btn btn-primary" onclick="schemaSaveDocuments()">Save Documents →</button>
+                    </div>
+                    <div class="form-status" id="schemaStep4Status"></div>
+                </div>
+            </div>
+
+            <!-- Schema Step 5: AI Extraction (placeholder) -->
+            <div class="forge-step" id="schemaStep5" style="display:none">
+                <div class="forge-step-header">
+                    <span class="forge-step-num">5</span>
+                    <span>AI Document Analysis</span>
+                </div>
+                <div class="forge-body">
+                    <p style="font-size:12px;color:var(--text-dim);text-align:center;padding:40px 0">
+                        🔮 Coming soon — AI will extract abstract details from each document to build skill scrolls.
+                    </p>
+                    <div class="forge-actions">
+                        <button class="btn btn-skip" onclick="schemaShowStep(4)">← Back</button>
+                        <button class="btn btn-skip" onclick="closeSchemaWizard()">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Forge Wizard -->
+    <div class="modal-overlay" id="forgeOverlay">
+        <div class="modal forge-modal" id="forgeModal">
+            <div class="modal-header">
+                <span class="modal-title" id="forgeTitle">🔨 Folder Forge</span>
+                <button class="modal-close" onclick="closeForge()">&times;</button>
+            </div>
+
+            <!-- Step 1: Folder Identity -->
+            <div class="forge-step" id="forgeStep1">
+                <div class="forge-step-header">
+                    <span class="forge-step-num">1</span>
+                    <span>Folder Identity</span>
+                </div>
+                <div class="forge-body">
+                    <div class="form-group">
+                        <label>Folder Name</label>
+                        <input type="text" id="forgeFolderName" placeholder="e.g., Regulation of Parking" oninput="autoGenerateFolderKey()">
+                    </div>
+                    <div class="form-group">
+                        <label>Folder Key (machine ID)</label>
+                        <input type="text" id="forgeFolderKey" placeholder="e.g., regulation_of_parking">
+                        <div class="form-hint">Auto-generated from name. Used as the folder directory name.</div>
+                    </div>
+                    <div class="form-group">
+                        <label>External System ID <span style="color:var(--text-dim)">(optional)</span></label>
+                        <input type="text" id="forgeExternalId" placeholder="e.g., CM9 folder ID, TechOne reference">
+                        <div class="form-hint">For future integration with records management systems.</div>
+                    </div>
+                    <div class="form-group">
+                        <label>Description <span style="color:var(--text-dim)">(optional)</span></label>
+                        <textarea id="forgeFolderDesc" rows="2" placeholder="Brief description of what this folder handles" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;resize:vertical"></textarea>
+                    </div>
+                    <div class="forge-actions">
+                        <button class="btn btn-skip" onclick="closeForge()">Cancel</button>
+                        <button class="btn btn-primary" onclick="forgeNext(2)">Next →</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 2: Upload Events -->
+            <div class="forge-step" id="forgeStep2" style="display:none">
+                <div class="forge-step-header">
+                    <span class="forge-step-num">2</span>
+                    <span>Preparation — Upload Events</span>
+                </div>
+                <div class="forge-body">
+                    <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px">
+                        Upload sample emails that belong to this folder. Each email represents one event type.
+                        <span class="forge-tooltip" title="An event is a single email with its attachments — one incoming request or correspondence. For best results, provide one example of each type of request this folder handles.">ⓘ What is an event?</span>
+                    </p>
+                    <div class="forge-dropzone" id="forgeDropzone" ondrop="forgeHandleDrop(event)" ondragover="forgeDragOver(event)" ondragleave="forgeDragLeave(event)">
+                        <div class="forge-dropzone-icon">📧</div>
+                        <div class="forge-dropzone-text">Drag & drop .eml files here</div>
+                        <div class="forge-dropzone-sub">or click to browse</div>
+                        <input type="file" id="forgeFileInput" multiple accept=".eml,.msg" style="display:none" onchange="forgeFilesSelected(event)">
+                    </div>
+                    <div class="forge-file-list" id="forgeFileList"></div>
+                    <div class="forge-actions">
+                        <button class="btn btn-skip" onclick="forgeNext(1)">← Back</button>
+                        <button class="btn btn-primary" id="forgeUploadBtn" onclick="forgeUploadEvents()" disabled>Upload & Parse</button>
+                    </div>
+                    <div class="form-status" id="forgeUploadStatus"></div>
+                </div>
+            </div>
+
+            <!-- Step 3: Review Events -->
+            <div class="forge-step" id="forgeStep3" style="display:none">
+                <div class="forge-step-header">
+                    <span class="forge-step-num">3</span>
+                    <span>Review Events</span>
+                </div>
+                <div class="forge-body">
+                    <div class="forge-event-cards" id="forgeEventCards"></div>
+                    <div class="forge-actions">
+                        <button class="btn btn-skip" onclick="forgeNext(2)">← Back</button>
+                        <button class="btn btn-primary forge-btn-analyze" onclick="forgeRunAnalysis()">🔨 Create Folder</button>
+                    </div>
+                    <div class="form-status" id="forgeAnalysisStatus"></div>
+                </div>
+            </div>
+
+            <!-- Step 4: Results -->
+            <div class="forge-step" id="forgeStep4" style="display:none">
+                <div class="forge-step-header">
+                    <span class="forge-step-num">4</span>
+                    <span>Forge Complete</span>
+                </div>
+                <div class="forge-body">
+                    <div class="forge-progress" id="forgeProgress"></div>
+                    <div class="forge-results" id="forgeResults"></div>
+                    <div class="forge-actions">
+                        <button class="btn btn-primary" onclick="forgeSaveAndActivate()" id="forgeSaveBtn" style="display:none">✓ Save & Activate</button>
+                        <button class="btn btn-skip" onclick="closeForge()">Close</button>
+                    </div>
+                    <div class="form-status" id="forgeSaveStatus"></div>
+                </div>
+            </div>
+        </div>
+    </div>
 </body>
 </html>

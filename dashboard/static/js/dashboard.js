@@ -146,15 +146,16 @@ function renderFolderGrid(folders) {
 
 function createFolderCard(folder, isUndetermined) {
     const card = document.createElement('div');
-    card.className = `folder-card${folder.count > 0 ? ' has-items' : ''}${isUndetermined ? ' undetermined' : ''}`;
+    const isDraft = folder.status === 'draft';
+    card.className = `folder-card${folder.count > 0 ? ' has-items' : ''}${isUndetermined ? ' undetermined' : ''}${isDraft ? ' draft' : ''}`;
     card.dataset.key = folder.key;
     card.onclick = () => openFolderPanel(folder.key);
 
-    const prefix = isUndetermined ? '❓ ' : '';
+    const prefix = isUndetermined ? '❓ ' : isDraft ? '🔨 ' : '';
     card.innerHTML = `
         <div class="folder-name">${prefix}${escapeHtml(folder.name)}</div>
         <div class="folder-count ${folder.count === 0 ? 'empty' : ''}" id="count-${folder.key}">${folder.count}</div>
-        <div class="folder-count-label">events</div>
+        <div class="folder-count-label">${isDraft ? 'draft' : 'events'}</div>
         <div class="folder-badge">+${folder.count}</div>
     `;
     return card;
@@ -247,7 +248,24 @@ async function openFolderPanel(folderKey) {
         const eventsContainer = document.getElementById('panelEvents');
         eventsContainer.innerHTML = '';
 
-        if (data.events.length === 0) {
+        // Check if this is a draft folder
+        const folderInfo = currentState ? currentState.folders.find(f => f.key === folderKey) : null;
+        const isDraft = folderInfo && folderInfo.status === 'draft';
+
+        if (isDraft) {
+            eventsContainer.innerHTML = `
+                <div style="padding:20px 0;text-align:center">
+                    <div style="font-size:32px;margin-bottom:12px">🔨</div>
+                    <div style="font-size:13px;font-weight:600;color:var(--amber);margin-bottom:8px">Draft Folder</div>
+                    <div style="font-size:11px;color:var(--text-muted);margin-bottom:20px">This folder is not active in classification yet. Complete the schema to configure it.</div>
+                    <button class="btn btn-primary" onclick="closePanel(); openSchemaWizard('${folderKey}')" style="font-size:13px">📋 Complete Folder Schema</button>
+                    <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:center">
+                        <button class="btn btn-skip" onclick="resetForgeProgress('${folderKey}')" style="font-size:11px">↻ Start as New</button>
+                        <button class="btn btn-skip" onclick="confirmDeleteDraftFolder('${folderKey}')" style="font-size:11px;color:var(--red);border-color:rgba(239,68,68,0.3)">🗑 Remove</button>
+                    </div>
+                </div>
+            `;
+        } else if (data.events.length === 0) {
             eventsContainer.innerHTML = '<div style="color: var(--text-dim); font-size: 13px; padding: 20px 0; text-align: center;">No events in this folder</div>';
         } else {
             data.events.forEach(ev => {
@@ -289,7 +307,8 @@ async function openFolderPanel(folderKey) {
                     <div class="panel-event-actions">${actionsHtml}</div>
                 `;
 
-                card.onclick = () => {
+                card.onclick = (e) => {
+                    if (e.target.closest('.panel-event-actions')) return;
                     if (ev.receipt) showReceipt(ev.receipt);
                 };
 
@@ -2034,4 +2053,986 @@ function showPipelineDetail(eventId) {
     }
 
     modal.classList.add('open');
+}
+
+/* ── Resizable Panels ── */
+
+(function initResizablePanels() {
+    const saved = JSON.parse(localStorage.getItem('panelLayout') || '{}');
+
+    // Apply saved sizes on load
+    if (saved.sidebarWidth) {
+        document.documentElement.style.setProperty('--sidebar-width', saved.sidebarWidth + 'px');
+    }
+    if (saved.activityHeight) {
+        document.documentElement.style.setProperty('--activity-height', saved.activityHeight + 'px');
+    }
+    if (saved.colWidths) {
+        for (const [id, pct] of Object.entries(saved.colWidths)) {
+            const el = document.getElementById(id);
+            if (el) { el.style.flex = 'none'; el.style.width = pct + '%'; }
+        }
+    }
+
+    function persist(key, value) {
+        const current = JSON.parse(localStorage.getItem('panelLayout') || '{}');
+        current[key] = value;
+        localStorage.setItem('panelLayout', JSON.stringify(current));
+    }
+
+    // Sidebar resize (horizontal)
+    const sidebarHandle = document.getElementById('resizeSidebar');
+    if (sidebarHandle) {
+        let dragging = false;
+        sidebarHandle.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            dragging = true;
+            sidebarHandle.classList.add('active');
+            document.body.style.cursor = 'col-resize';
+            document.body.style.userSelect = 'none';
+        });
+        document.addEventListener('mousemove', (e) => {
+            if (!dragging) return;
+            const width = Math.max(180, Math.min(500, e.clientX));
+            document.documentElement.style.setProperty('--sidebar-width', width + 'px');
+        });
+        document.addEventListener('mouseup', () => {
+            if (!dragging) return;
+            dragging = false;
+            sidebarHandle.classList.remove('active');
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+            const width = parseInt(getComputedStyle(document.querySelector('.sidebar')).width);
+            persist('sidebarWidth', width);
+            setTimeout(drawRouteLines, 50);
+        });
+    }
+
+    // Activity panel resize (vertical)
+    const activityHandle = document.getElementById('resizeActivity');
+    if (activityHandle) {
+        let dragging = false;
+        activityHandle.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            dragging = true;
+            activityHandle.classList.add('active');
+            document.body.style.cursor = 'row-resize';
+            document.body.style.userSelect = 'none';
+        });
+        document.addEventListener('mousemove', (e) => {
+            if (!dragging) return;
+            const mainEl = document.querySelector('.main');
+            const mainRect = mainEl.getBoundingClientRect();
+            const height = Math.max(120, Math.min(mainRect.height - 100, mainRect.bottom - e.clientY));
+            document.documentElement.style.setProperty('--activity-height', height + 'px');
+        });
+        document.addEventListener('mouseup', () => {
+            if (!dragging) return;
+            dragging = false;
+            activityHandle.classList.remove('active');
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+            const panel = document.getElementById('activityPanel') || document.querySelector('.activity-panel');
+            const height = parseInt(getComputedStyle(panel).height);
+            persist('activityHeight', height);
+            setTimeout(drawRouteLines, 50);
+        });
+    }
+
+    // Service column resize (horizontal between columns)
+    document.querySelectorAll('.resize-handle-col').forEach(handle => {
+        let dragging = false;
+        let leftCol = null;
+        let rightCol = null;
+        let startX = 0;
+        let startLeftW = 0;
+        let startRightW = 0;
+
+        handle.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            leftCol = document.getElementById(handle.dataset.left);
+            rightCol = document.getElementById(handle.dataset.right);
+            if (!leftCol || !rightCol) return;
+            dragging = true;
+            startX = e.clientX;
+            startLeftW = leftCol.getBoundingClientRect().width;
+            startRightW = rightCol.getBoundingClientRect().width;
+            handle.classList.add('active');
+            document.body.style.cursor = 'col-resize';
+            document.body.style.userSelect = 'none';
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!dragging) return;
+            const delta = e.clientX - startX;
+            const newLeft = Math.max(100, startLeftW + delta);
+            const newRight = Math.max(100, startRightW - delta);
+            leftCol.style.flex = 'none';
+            leftCol.style.width = newLeft + 'px';
+            rightCol.style.flex = 'none';
+            rightCol.style.width = newRight + 'px';
+        });
+
+        document.addEventListener('mouseup', () => {
+            if (!dragging) return;
+            dragging = false;
+            handle.classList.remove('active');
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+
+            // Save all column widths as percentages
+            const panel = document.querySelector('.activity-panel');
+            const panelW = panel.getBoundingClientRect().width;
+            const colWidths = {};
+            ['colPoll', 'colPipeline', 'colClassify', 'colResults'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    const w = el.getBoundingClientRect().width;
+                    const pct = (w / panelW) * 100;
+                    colWidths[id] = Math.round(pct * 100) / 100;
+                }
+            });
+            persist('colWidths', colWidths);
+        });
+    });
+})();
+
+/* ── Forge Wizard ── */
+
+let forgeFiles = [];
+let forgeParsedEvents = [];
+let forgeResultData = null;
+
+function openForge() {
+    forgeFiles = [];
+    forgeParsedEvents = [];
+    forgeResultData = null;
+    document.getElementById('forgeFolderName').value = '';
+    document.getElementById('forgeFolderKey').value = '';
+    document.getElementById('forgeExternalId').value = '';
+    document.getElementById('forgeFolderDesc').value = '';
+    document.getElementById('forgeFileList').innerHTML = '';
+    document.getElementById('forgeUploadBtn').disabled = true;
+    forgeShowStep(1);
+    document.getElementById('forgeOverlay').classList.add('open');
+}
+
+function closeForge() {
+    document.getElementById('forgeOverlay').classList.remove('open');
+}
+
+function forgeShowStep(step) {
+    [1, 2, 3, 4].forEach(s => {
+        const el = document.getElementById(`forgeStep${s}`);
+        if (el) el.style.display = s === step ? 'block' : 'none';
+    });
+}
+
+function forgeNext(step) {
+    if (step === 2) {
+        const name = document.getElementById('forgeFolderName').value.trim();
+        if (!name) {
+            document.getElementById('forgeFolderName').style.borderColor = 'var(--red)';
+            return;
+        }
+        document.getElementById('forgeFolderName').style.borderColor = '';
+    }
+    forgeShowStep(step);
+}
+
+function autoGenerateFolderKey() {
+    const name = document.getElementById('forgeFolderName').value;
+    const key = name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+    document.getElementById('forgeFolderKey').value = key;
+}
+
+// Dropzone handlers
+document.addEventListener('DOMContentLoaded', () => {
+    const dz = document.getElementById('forgeDropzone');
+    if (dz) dz.onclick = () => document.getElementById('forgeFileInput').click();
+});
+
+function forgeDragOver(e) {
+    e.preventDefault();
+    e.currentTarget.classList.add('dragover');
+}
+
+function forgeDragLeave(e) {
+    e.currentTarget.classList.remove('dragover');
+}
+
+function forgeHandleDrop(e) {
+    e.preventDefault();
+    e.currentTarget.classList.remove('dragover');
+    const files = Array.from(e.dataTransfer.files).filter(f => f.name.endsWith('.eml') || f.name.endsWith('.msg'));
+    forgeAddFiles(files);
+}
+
+function forgeFilesSelected(e) {
+    const files = Array.from(e.target.files);
+    forgeAddFiles(files);
+    e.target.value = '';
+}
+
+function forgeAddFiles(files) {
+    files.forEach(f => {
+        if (!forgeFiles.find(existing => existing.name === f.name && existing.size === f.size)) {
+            forgeFiles.push(f);
+        }
+    });
+    forgeRenderFileList();
+}
+
+function forgeRemoveFile(index) {
+    forgeFiles.splice(index, 1);
+    forgeRenderFileList();
+}
+
+function forgeRenderFileList() {
+    const list = document.getElementById('forgeFileList');
+    list.innerHTML = '';
+    forgeFiles.forEach((f, i) => {
+        const item = document.createElement('div');
+        item.className = 'forge-file-item';
+        const sizeKb = (f.size / 1024).toFixed(1);
+        item.innerHTML = `
+            <span class="forge-file-item-name">📧 ${escapeHtml(f.name)}</span>
+            <span class="forge-file-item-size">${sizeKb} KB</span>
+            <button class="forge-file-remove" onclick="forgeRemoveFile(${i})">✕</button>
+        `;
+        list.appendChild(item);
+    });
+    document.getElementById('forgeUploadBtn').disabled = forgeFiles.length === 0;
+}
+
+async function forgeUploadEvents() {
+    const status = document.getElementById('forgeUploadStatus');
+    const btn = document.getElementById('forgeUploadBtn');
+    status.className = 'form-status loading';
+    status.textContent = 'Parsing emails...';
+    btn.disabled = true;
+
+    const folderName = document.getElementById('forgeFolderName').value.trim();
+    const folderKey = document.getElementById('forgeFolderKey').value.trim();
+
+    try {
+        const formData = new FormData();
+        formData.append('folder_name', folderName);
+        formData.append('folder_key', folderKey);
+        formData.append('dev_mode', devMode ? 'true' : 'false');
+        forgeFiles.forEach(f => formData.append('files', f));
+
+        const resp = await fetch('/api/forge/upload', { method: 'POST', body: formData });
+        const data = await resp.json();
+
+        if (data.success) {
+            forgeParsedEvents = data.events;
+            status.className = 'form-status success';
+            status.textContent = `✓ ${data.events.length} event(s) parsed`;
+
+            // Render event cards for step 3
+            const cards = document.getElementById('forgeEventCards');
+            cards.innerHTML = '';
+            data.events.forEach(ev => {
+                const card = document.createElement('div');
+                card.className = 'forge-event-card';
+                let metaHtml = `${escapeHtml(ev.sender || '')} · ${ev.file_count} file(s)`;
+                if (ev.has_source_schema) {
+                    metaHtml = `<span style="color:var(--green)">✓ JSON Schema</span> · ${ev.schema_fields || 0} fields`;
+                    if (ev.application_type) metaHtml += ` · ${escapeHtml(ev.application_type)}`;
+                    if (ev.council_ref) metaHtml += ` · ${escapeHtml(ev.council_ref)}`;
+                }
+                card.innerHTML = `
+                    <div class="forge-event-card-subject">${escapeHtml(ev.subject || ev.event_id)}</div>
+                    <div class="forge-event-card-meta">${metaHtml}</div>
+                    <div class="forge-event-card-files">${ev.attachments.map(a => escapeHtml(a)).join(', ') || 'No attachments'}</div>
+                `;
+                cards.appendChild(card);
+            });
+
+            setTimeout(() => forgeShowStep(3), 800);
+        } else {
+            status.className = 'form-status error';
+            status.textContent = `✗ ${data.error}`;
+        }
+    } catch (err) {
+        status.className = 'form-status error';
+        status.textContent = `✗ ${err.message}`;
+    }
+    btn.disabled = false;
+}
+
+async function forgeRunAnalysis() {
+    // This is now "Create Folder" — creates the draft folder skeleton
+    const status = document.getElementById('forgeAnalysisStatus');
+    const btn = document.querySelector('.forge-btn-analyze');
+    status.className = 'form-status loading';
+    status.textContent = '🔨 Forging new folder skeleton, please wait...';
+    if (btn) btn.disabled = true;
+
+    const folderName = document.getElementById('forgeFolderName').value.trim();
+    const folderKey = document.getElementById('forgeFolderKey').value.trim();
+    const folderDesc = document.getElementById('forgeFolderDesc').value.trim();
+    const externalId = document.getElementById('forgeExternalId').value.trim();
+
+    try {
+        const resp = await fetch('/api/forge/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                folder_name: folderName,
+                folder_key: folderKey,
+                description: folderDesc,
+                external_id: externalId,
+            }),
+        });
+        const data = await resp.json();
+
+        if (data.success) {
+            status.className = 'form-status success';
+            status.textContent = `✓ Folder "${folderName}" created as draft`;
+            setTimeout(() => {
+                closeForge();
+                loadState();
+            }, 1500);
+        } else {
+            status.className = 'form-status error';
+            status.textContent = `✗ ${data.error}`;
+            if (btn) btn.disabled = false;
+        }
+    } catch (err) {
+        status.className = 'form-status error';
+        status.textContent = `✗ ${err.message}`;
+        if (btn) btn.disabled = false;
+    }
+}
+
+async function forgeSaveAndActivate() {
+    // Deprecated — folder creation now happens in forgeRunAnalysis
+    closeForge();
+    loadState();
+}
+
+/* ── Schema Completion Wizard ── */
+
+let schemaWizardFolderKey = null;
+let schemaWizardDocs = [];
+let schemaWizardSchema = null;
+
+function openSchemaWizard(folderKey) {
+    schemaWizardFolderKey = folderKey;
+    schemaWizardDocs = [];
+    schemaWizardSchema = null;
+    schemaTriggers = [];
+    schemaExclusions = [];
+    schemaShowStep(1);
+    document.getElementById('schemaWizardOverlay').classList.add('open');
+    document.getElementById('schemaWizardTitle').textContent = '📋 Loading...';
+    document.getElementById('schemaJsonEditor').value = 'Loading...';
+    loadSchemaWizardWithProgress(folderKey);
+}
+
+async function loadSchemaWizardWithProgress(folderKey) {
+    // Load schema
+    await loadSchemaForWizard(folderKey);
+
+    // Check progress for resumption
+    try {
+        const progress = await fetch(`/api/forge/progress/${folderKey}`).then(r => r.json());
+        if (progress.last_step && progress.last_step > 1) {
+            // Restore classification draft if available
+            if (progress.classification_draft) {
+                schemaTriggers = progress.classification_draft.triggers || [];
+                schemaExclusions = progress.classification_draft.exclusions || [];
+                const descEl = document.getElementById('schemaFolderDesc');
+                if (descEl && progress.classification_draft.description) {
+                    descEl.value = progress.classification_draft.description;
+                }
+            }
+            // Resume from last completed step + 1
+            const resumeStep = Math.min(progress.last_step + 1, 5);
+            if (progress.last_step >= 3) renderSchemaDocList();
+            if (progress.last_step >= 2) { renderTriggerCards(); renderExclusionCards(); }
+            schemaShowStep(resumeStep);
+        }
+    } catch (e) {}
+}
+
+function closeSchemaWizard() {
+    document.getElementById('schemaWizardOverlay').classList.remove('open');
+}
+
+function schemaShowStep(step) {
+    [1, 2, 3, 4, 5].forEach(s => {
+        const el = document.getElementById(`schemaStep${s}`);
+        if (el) el.style.display = s === step ? 'block' : 'none';
+    });
+}
+
+async function loadSchemaForWizard(folderKey) {
+    try {
+        const data = await fetch(`/api/forge/schema/${folderKey}`).then(r => r.json());
+        if (data.error) {
+            document.getElementById('schemaJsonEditor').value = `Error: ${data.error}`;
+            return;
+        }
+        schemaWizardSchema = data.schema;
+        schemaWizardDocs = data.documents || [];
+        document.getElementById('schemaWizardTitle').textContent = '📋 Complete Folder Schema';
+        document.getElementById('schemaJsonEditor').value = JSON.stringify(data.schema, null, 2);
+    } catch (err) {
+        document.getElementById('schemaJsonEditor').value = `Error: ${err.message}`;
+    }
+}
+
+async function schemaConfirmJson() {
+    const status = document.getElementById('schemaStep1Status');
+    const raw = document.getElementById('schemaJsonEditor').value;
+    try {
+        schemaWizardSchema = JSON.parse(raw);
+    } catch (e) {
+        status.className = 'form-status error';
+        status.textContent = 'Invalid JSON — fix syntax errors before continuing';
+        return;
+    }
+    status.className = 'form-status loading';
+    status.textContent = 'Saving schema...';
+
+    try {
+        const resp = await fetch(`/api/forge/schema/${schemaWizardFolderKey}/save`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ schema: schemaWizardSchema }),
+        });
+        const data = await resp.json();
+        if (data.success) {
+            status.className = 'form-status success';
+            status.textContent = '✓ Schema saved';
+            setTimeout(() => schemaShowStep(2), 600);
+        } else {
+            status.className = 'form-status error';
+            status.textContent = `✗ ${data.error}`;
+        }
+    } catch (err) {
+        status.className = 'form-status error';
+        status.textContent = `✗ ${err.message}`;
+    }
+}
+
+function renderSchemaDocList() {
+    const list = document.getElementById('schemaDocList');
+    list.innerHTML = '';
+    if (schemaWizardDocs.length === 0 && schemaWizardSchema) {
+        schemaWizardDocs = schemaWizardSchema.documents || [];
+    }
+    schemaWizardDocs.forEach((doc, i) => {
+        const item = document.createElement('div');
+        item.className = 'schema-doc-item';
+        const reqClass = doc.required ? 'required' : 'optional';
+        const reqText = doc.required ? 'Required' : 'Optional';
+        const modeClass = doc.mode === 'extract' ? 'extract' : 'verify';
+        const modeText = doc.mode === 'extract' ? 'Extract' : 'Verify';
+        const confPct = doc.confidence ? Math.round(doc.confidence * 100) : 0;
+
+        item.innerHTML = `
+            <div style="display:flex;align-items:center;gap:8px;width:100%">
+                <input type="text" value="${escapeHtml(doc.documentType)}" style="flex:1;padding:5px 8px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12px;font-weight:500" onchange="schemaWizardDocs[${i}].documentType=this.value">
+                <span class="schema-doc-tag ${reqClass}" onclick="toggleDocRequired(${i})">${reqText}</span>
+                <span class="schema-doc-tag ${modeClass}" onclick="toggleDocMode(${i})">${modeText}</span>
+                <button onclick="schemaWizardDocs.splice(${i},1);renderSchemaDocList()" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:12px;flex-shrink:0">✕</button>
+            </div>
+            <div style="font-size:10px;color:var(--text-dim);margin-top:4px;padding-left:2px">
+                ${doc.originalFileName ? `📎 ${escapeHtml(doc.originalFileName)}` : '<span style="color:var(--amber)">No sample file linked</span>'}
+                ${confPct > 0 ? ` · ${confPct}% match` : ''}
+            </div>
+        `;
+
+        if (doc.mode === 'extract') {
+            const fieldsDiv = document.createElement('div');
+            fieldsDiv.style.cssText = 'margin-top:8px;padding-top:8px;border-top:1px solid var(--border);width:100%';
+
+            // Instruction input + generate button
+            const instrRow = document.createElement('div');
+            instrRow.style.cssText = 'display:flex;gap:6px;margin-bottom:8px;align-items:flex-start';
+            const instrVal = doc.instruction || '';
+            instrRow.innerHTML = `
+                <textarea placeholder="Describe what to extract... e.g., find the total cost amount, check if GST is included" style="flex:1;padding:6px 8px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:11px;resize:vertical;min-height:36px;line-height:1.4" id="docInstr_${i}">${escapeHtml(instrVal)}</textarea>
+                <button onclick="generateFieldsFromInstruction(${i})" style="background:var(--green);color:#fff;border:none;border-radius:4px;padding:6px 10px;cursor:pointer;font-size:13px;flex-shrink:0" title="Generate fields from instruction" id="docInstrBtn_${i}">✓</button>
+            `;
+            fieldsDiv.appendChild(instrRow);
+
+            // Status
+            const statusDiv = document.createElement('div');
+            statusDiv.id = `docFieldStatus_${i}`;
+            statusDiv.style.cssText = 'font-size:10px;margin-bottom:6px;min-height:14px';
+            fieldsDiv.appendChild(statusDiv);
+
+            // Generated fields
+            const fields = doc.extractFields || [];
+            if (fields.length > 0) {
+                const fieldsTitle = document.createElement('div');
+                fieldsTitle.style.cssText = 'font-size:10px;color:var(--text-dim);margin-bottom:4px;font-weight:600';
+                fieldsTitle.textContent = `${fields.length} field(s):`;
+                fieldsDiv.appendChild(fieldsTitle);
+            }
+            fields.forEach((f, fi) => {
+                const row = document.createElement('div');
+                row.style.cssText = 'display:flex;gap:4px;margin-bottom:3px;font-size:10px;align-items:center';
+                row.innerHTML = `
+                    <input type="text" value="${escapeHtml(f.key)}" style="width:80px;padding:3px 5px;background:var(--bg);border:1px solid var(--border);border-radius:3px;color:var(--accent);font-size:10px;font-family:monospace" onchange="updateExtractField(${i},${fi},'key',this.value)">
+                    <input type="text" value="${escapeHtml(f.label)}" style="flex:1;padding:3px 5px;background:var(--bg);border:1px solid var(--border);border-radius:3px;color:var(--text);font-size:10px" onchange="updateExtractField(${i},${fi},'label',this.value)">
+                    <span style="color:var(--text-dim);font-size:9px;width:40px;text-align:center">${f.type || 'string'}</span>
+                    <button onclick="removeExtractField(${i},${fi})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:10px;padding:0 2px">✕</button>
+                `;
+                fieldsDiv.appendChild(row);
+            });
+
+            // Manual add field button
+            const addBtn = document.createElement('button');
+            addBtn.style.cssText = 'font-size:9px;color:var(--accent);background:none;border:1px dashed var(--border);border-radius:3px;padding:2px 6px;cursor:pointer;margin-top:4px';
+            addBtn.textContent = '+ manual field';
+            addBtn.onclick = () => addExtractField(i);
+            fieldsDiv.appendChild(addBtn);
+
+            item.appendChild(fieldsDiv);
+        }
+
+        list.appendChild(item);
+    });
+}
+
+function toggleDocRequired(index) {
+    schemaWizardDocs[index].required = !schemaWizardDocs[index].required;
+    renderSchemaDocList();
+}
+
+function toggleDocMode(index) {
+    const doc = schemaWizardDocs[index];
+    doc.mode = doc.mode === 'extract' ? 'verify' : 'extract';
+    if (doc.mode === 'extract' && (!doc.extractFields || doc.extractFields.length === 0)) {
+        doc.extractFields = [];
+    }
+    renderSchemaDocList();
+}
+
+function addExtractField(docIndex) {
+    if (!schemaWizardDocs[docIndex].extractFields) schemaWizardDocs[docIndex].extractFields = [];
+    schemaWizardDocs[docIndex].extractFields.push({ key: '', label: '', type: 'string', instruction: '' });
+    renderSchemaDocList();
+}
+
+function removeExtractField(docIndex, fieldIndex) {
+    schemaWizardDocs[docIndex].extractFields.splice(fieldIndex, 1);
+    renderSchemaDocList();
+}
+
+function updateExtractField(docIndex, fieldIndex, prop, value) {
+    schemaWizardDocs[docIndex].extractFields[fieldIndex][prop] = value;
+}
+
+async function schemaSaveDocuments() {
+    const status = document.getElementById('schemaStep2Status');
+    status.className = 'form-status loading';
+    status.textContent = 'Saving document requirements...';
+    try {
+        const resp = await fetch(`/api/forge/documents/${schemaWizardFolderKey}/save`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ documents: schemaWizardDocs }),
+        });
+        const data = await resp.json();
+        if (data.success) {
+            status.className = 'form-status success';
+            status.textContent = `✓ ${data.count} document requirements saved`;
+            setTimeout(() => schemaShowStep(5), 800);
+        } else {
+            status.className = 'form-status error';
+            status.textContent = `✗ ${data.error}`;
+        }
+    } catch (err) {
+        status.className = 'form-status error';
+        status.textContent = `✗ ${err.message}`;
+    }
+}
+
+async function confirmDeleteDraftFolder(folderKey) {
+    if (!confirm('Are you sure you want to stop forging this folder? This will remove it completely.')) return;
+    try {
+        const resp = await fetch(`/api/forge/delete/${folderKey}`, { method: 'POST' });
+        const data = await resp.json();
+        if (data.success) {
+            closePanel();
+            loadState();
+        } else {
+            alert(data.error || 'Failed to delete folder');
+        }
+    } catch (err) {
+        alert('Error: ' + err.message);
+    }
+}
+
+/* ── Trigger Generation (Schema Wizard Step 2) ── */
+
+let schemaTriggers = [];
+let schemaExclusions = [];
+
+async function generateTriggers() {
+    const desc = document.getElementById('schemaFolderDesc').value.trim();
+    if (!desc) {
+        document.getElementById('triggerGenStatus').className = 'form-status error';
+        document.getElementById('triggerGenStatus').textContent = 'Write a description first';
+        return;
+    }
+    const btn = document.getElementById('genTriggersBtn');
+    btn.disabled = true;
+    btn.textContent = '🤖 Generating...';
+    document.getElementById('triggerGenStatus').className = 'form-status loading';
+    document.getElementById('triggerGenStatus').textContent = 'Asking local LLM...';
+
+    const folderName = schemaWizardSchema ? schemaWizardSchema.folder_name || '' : '';
+
+    try {
+        const resp = await fetch('/api/forge/generate-triggers', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ folder_name: folderName, description: desc }),
+        });
+        const data = await resp.json();
+
+        if (data.error) {
+            document.getElementById('triggerGenStatus').className = 'form-status error';
+            document.getElementById('triggerGenStatus').textContent = data.error;
+        } else {
+            schemaTriggers = data.triggers || [];
+            schemaExclusions = data.exclusions || [];
+            document.getElementById('triggerGenStatus').className = 'form-status success';
+            document.getElementById('triggerGenStatus').textContent = `✓ ${schemaTriggers.length} triggers, ${schemaExclusions.length} exclusions (${data.latency_ms}ms)`;
+            renderTriggerCards();
+            renderExclusionCards();
+        }
+    } catch (err) {
+        document.getElementById('triggerGenStatus').className = 'form-status error';
+        document.getElementById('triggerGenStatus').textContent = err.message;
+    }
+    btn.disabled = false;
+    btn.textContent = '🤖 Generate Triggers';
+}
+
+function renderTriggerCards() {
+    const container = document.getElementById('triggerCards');
+    container.innerHTML = '';
+    if (schemaTriggers.length === 0) return;
+    const title = document.createElement('div');
+    title.style.cssText = 'font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px';
+    title.textContent = 'Triggers';
+    container.appendChild(title);
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px';
+    schemaTriggers.forEach((t, i) => {
+        const chip = document.createElement('span');
+        chip.className = 'trigger-chip';
+        chip.innerHTML = `<span contenteditable="true" class="trigger-chip-text" onblur="updateTrigger(${i},this.textContent)">${escapeHtml(t)}</span><button onclick="removeTrigger(${i})">✕</button>`;
+        wrap.appendChild(chip);
+    });
+    const addBtn = document.createElement('span');
+    addBtn.className = 'trigger-chip add';
+    addBtn.textContent = '+ Add';
+    addBtn.onclick = () => { schemaTriggers.push('new trigger'); renderTriggerCards(); };
+    wrap.appendChild(addBtn);
+    container.appendChild(wrap);
+}
+
+function renderExclusionCards() {
+    const container = document.getElementById('exclusionCards');
+    container.innerHTML = '';
+    if (schemaExclusions.length === 0 && schemaTriggers.length === 0) return;
+    const title = document.createElement('div');
+    title.style.cssText = 'font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;margin-top:12px';
+    title.textContent = 'Exclusions';
+    container.appendChild(title);
+
+    // Build folder options from current state
+    const folderOptions = ['Undetermined'];
+    if (currentState && currentState.folders) {
+        currentState.folders.forEach(f => {
+            if (f.key !== schemaWizardFolderKey && f.key !== 'junk') folderOptions.push(f.name);
+        });
+    }
+    const optionsHtml = folderOptions.map(f => `<option value="${escapeHtml(f)}">${escapeHtml(f)}</option>`).join('');
+
+    schemaExclusions.forEach((ex, i) => {
+        // Parse existing "If condition → destination" format
+        let condition = ex;
+        let destination = 'Undetermined';
+        const arrowIdx = ex.indexOf('→');
+        if (arrowIdx > -1) {
+            condition = ex.substring(0, arrowIdx).replace(/^If\s*/i, '').trim();
+            destination = ex.substring(arrowIdx + 1).trim();
+        }
+
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;gap:6px;margin-bottom:6px;align-items:center;flex-wrap:wrap';
+        row.innerHTML = `
+            <span style="font-size:10px;color:var(--text-dim);flex-shrink:0">If</span>
+            <input type="text" value="${escapeHtml(condition)}" placeholder="condition..." style="flex:2;padding:5px 8px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:11px" onchange="updateExclusion(${i}, this.value, null)">
+            <span style="font-size:10px;color:var(--text-dim);flex-shrink:0">→</span>
+            <select style="flex:1;padding:5px 6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:11px" onchange="updateExclusion(${i}, null, this.value)">
+                ${folderOptions.map(f => `<option value="${escapeHtml(f)}" ${f === destination ? 'selected' : ''}>${escapeHtml(f)}</option>`).join('')}
+            </select>
+            <button onclick="schemaExclusions.splice(${i},1);renderExclusionCards()" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:12px;flex-shrink:0">✕</button>
+        `;
+        container.appendChild(row);
+    });
+    const addBtn = document.createElement('button');
+    addBtn.style.cssText = 'font-size:10px;color:var(--accent);background:none;border:1px dashed var(--border);border-radius:4px;padding:3px 8px;cursor:pointer';
+    addBtn.textContent = '+ Add exclusion';
+    addBtn.onclick = () => { schemaExclusions.push('If condition → Undetermined'); renderExclusionCards(); };
+    container.appendChild(addBtn);
+}
+
+function updateExclusion(index, condition, destination) {
+    const current = schemaExclusions[index];
+    const arrowIdx = current.indexOf('→');
+    let cond = current;
+    let dest = 'Undetermined';
+    if (arrowIdx > -1) {
+        cond = current.substring(0, arrowIdx).replace(/^If\s*/i, '').trim();
+        dest = current.substring(arrowIdx + 1).trim();
+    }
+    if (condition !== null) cond = condition;
+    if (destination !== null) dest = destination;
+    schemaExclusions[index] = `If ${cond} → ${dest}`;
+}
+
+function removeTrigger(i) { schemaTriggers.splice(i, 1); renderTriggerCards(); }
+function updateTrigger(i, val) { schemaTriggers[i] = val.trim(); }
+
+async function saveTriggers() {
+    const status = document.getElementById('triggerSaveStatus');
+    const desc = document.getElementById('schemaFolderDesc').value.trim();
+
+    if (schemaTriggers.length === 0) {
+        status.className = 'form-status error';
+        status.textContent = 'Generate or add at least one trigger first';
+        return;
+    }
+
+    status.className = 'form-status loading';
+    status.textContent = 'Saving classification data...';
+
+    try {
+        const resp = await fetch(`/api/forge/save-classification/${schemaWizardFolderKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                triggers: schemaTriggers.filter(t => t.trim()),
+                exclusions: schemaExclusions.filter(e => e.trim()),
+                description: desc,
+            }),
+        });
+        const data = await resp.json();
+        if (data.success) {
+            status.className = 'form-status success';
+            status.textContent = `✓ ${data.triggers} triggers + ${data.exclusions} exclusions saved`;
+            // Build classification JSON preview for step 3
+            buildClassificationPreview();
+            setTimeout(() => schemaShowStep(3), 600);
+        } else {
+            status.className = 'form-status error';
+            status.textContent = `✗ ${data.error}`;
+        }
+    } catch (err) {
+        status.className = 'form-status error';
+        status.textContent = `✗ ${err.message}`;
+    }
+}
+
+/* ── Classification JSON Preview (Schema Wizard Step 3) ── */
+
+function buildClassificationPreview() {
+    const folderName = schemaWizardSchema ? schemaWizardSchema.folder_name || '' : '';
+    const desc = document.getElementById('schemaFolderDesc').value.trim();
+
+    const classJson = {
+        name: folderName,
+        description: desc,
+        triggers: schemaTriggers.filter(t => t.trim()),
+        exclusions: schemaExclusions.filter(e => e.trim()),
+    };
+
+    document.getElementById('classificationJsonEditor').value = JSON.stringify(classJson, null, 2);
+}
+
+async function saveClassificationJson() {
+    const status = document.getElementById('schemaStep3Status');
+    const raw = document.getElementById('classificationJsonEditor').value;
+
+    let classJson;
+    try {
+        classJson = JSON.parse(raw);
+    } catch (e) {
+        status.className = 'form-status error';
+        status.textContent = 'Invalid JSON — fix syntax errors';
+        return;
+    }
+
+    status.className = 'form-status loading';
+    status.textContent = 'Saving classification entry...';
+
+    try {
+        const resp = await fetch(`/api/forge/save-classification/${schemaWizardFolderKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                triggers: classJson.triggers || [],
+                exclusions: classJson.exclusions || [],
+                description: classJson.description || '',
+            }),
+        });
+        const data = await resp.json();
+        if (data.success) {
+            status.className = 'form-status success';
+            status.textContent = '✓ Classification entry saved';
+            renderSchemaDocList();
+            setTimeout(() => schemaShowStep(4), 600);
+        } else {
+            status.className = 'form-status error';
+            status.textContent = `✗ ${data.error}`;
+        }
+    } catch (err) {
+        status.className = 'form-status error';
+        status.textContent = `✗ ${err.message}`;
+    }
+}
+
+async function resetForgeProgress(folderKey) {
+    if (!confirm('Reset wizard progress? You will start from step 1.')) return;
+    try {
+        await fetch(`/api/forge/progress/${folderKey}/reset`, { method: 'POST' });
+        closePanel();
+        openSchemaWizard(folderKey);
+    } catch (err) {
+        alert('Error: ' + err.message);
+    }
+}
+
+/* ── Document Type Extraction (Schema Wizard Step 4) ── */
+
+async function extractDocTypes() {
+    const btn = document.getElementById('extractDocTypesBtn');
+    const status = document.getElementById('docTypeGenStatus');
+    btn.disabled = true;
+    btn.textContent = '🤖 Detecting...';
+    status.className = 'form-status loading';
+    status.textContent = 'Analysing source data with local LLM...';
+
+    try {
+        const resp = await fetch(`/api/forge/extract-doc-types/${schemaWizardFolderKey}`, { method: 'POST' });
+        const data = await resp.json();
+
+        if (data.error) {
+            status.className = 'form-status error';
+            status.textContent = data.error;
+        } else {
+            // Build docs from LLM response
+            schemaWizardDocs = (data.document_types || []).map(dt => ({
+                documentType: dt.documentType,
+                originalFileName: dt.matchedFile || '',
+                required: false,
+                mode: 'verify',
+                extractFields: [],
+                confidence: dt.confidence || 0,
+            }));
+            // Add unmatched files as new doc types
+            (data.unmatched_files || []).forEach(f => {
+                schemaWizardDocs.push({
+                    documentType: f.replace(/\.[^.]+$/, '').replace(/[_-]/g, ' '),
+                    originalFileName: f,
+                    required: false,
+                    mode: 'verify',
+                    extractFields: [],
+                    confidence: 0,
+                });
+            });
+            status.className = 'form-status success';
+            status.textContent = `✓ ${schemaWizardDocs.length} document types detected (${data.latency_ms}ms)`;
+            renderSchemaDocList();
+        }
+    } catch (err) {
+        status.className = 'form-status error';
+        status.textContent = err.message;
+    }
+    btn.disabled = false;
+    btn.textContent = '🤖 Auto-detect Document Types';
+}
+
+function addNewDocType() {
+    schemaWizardDocs.push({
+        documentType: 'New Document Type',
+        originalFileName: '',
+        required: false,
+        mode: 'verify',
+        extractFields: [],
+        confidence: 0,
+    });
+    renderSchemaDocList();
+}
+
+/* ── Field Generation from Instruction ── */
+
+async function generateFieldsFromInstruction(docIndex) {
+    const doc = schemaWizardDocs[docIndex];
+    const instrEl = document.getElementById(`docInstr_${docIndex}`);
+    const btnEl = document.getElementById(`docInstrBtn_${docIndex}`);
+    const statusEl = document.getElementById(`docFieldStatus_${docIndex}`);
+
+    const instruction = instrEl.value.trim();
+    if (!instruction) {
+        statusEl.style.color = 'var(--red)';
+        statusEl.textContent = 'Write an instruction first';
+        return;
+    }
+
+    // Save instruction to doc
+    doc.instruction = instruction;
+
+    btnEl.disabled = true;
+    btnEl.textContent = '⏳';
+    statusEl.style.color = 'var(--amber)';
+    statusEl.textContent = 'Generating fields...';
+
+    try {
+        const resp = await fetch('/api/forge/generate-fields', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                document_type: doc.documentType,
+                instruction: instruction,
+                filename: doc.originalFileName || '',
+                folder_key: schemaWizardFolderKey,
+            }),
+        });
+        const data = await resp.json();
+
+        if (data.error) {
+            statusEl.style.color = 'var(--red)';
+            statusEl.textContent = data.error;
+        } else {
+            doc.extractFields = (data.fields || []).map(f => ({
+                key: f.key || '',
+                label: f.label || '',
+                type: f.type || 'string',
+                instruction: f.instruction || '',
+            }));
+            statusEl.style.color = 'var(--green)';
+            statusEl.textContent = `✓ ${doc.extractFields.length} fields generated (${data.latency_ms}ms)`;
+            renderSchemaDocList();
+        }
+    } catch (err) {
+        statusEl.style.color = 'var(--red)';
+        statusEl.textContent = err.message;
+    }
+
+    btnEl.disabled = false;
+    btnEl.textContent = '✓';
 }
