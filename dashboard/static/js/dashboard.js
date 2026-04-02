@@ -75,6 +75,11 @@ function handleRealtimeUpdate(data) {
     const pendingEl = document.getElementById('pendingCount');
     if (pendingEl) pendingEl.textContent = data.pending_count;
 
+    // Auto-classify if enabled and new pending events detected
+    if (autoClassifyEnabled && data.pending_count > 0 && !isClassifying) {
+        classifyAll(true);
+    }
+
     // Refresh full state for event log
     loadState();
 }
@@ -343,13 +348,12 @@ function showReceipt(receipt) {
     const title = document.getElementById('modalTitle');
 
     if (devMode) {
-        // Developer mode: raw JSON
         title.textContent = `Raw Payload — ${receipt.event_id || 'Event'}`;
         body.innerHTML = '';
         body.textContent = JSON.stringify(receipt, null, 2);
         body.style.whiteSpace = 'pre-wrap';
+        body.style.fontFamily = "'SF Mono', 'Fira Code', monospace";
     } else {
-        // Staff mode: human-friendly card
         const subject = resolveDisplayTitle(receipt);
         const sender = receipt._sender || '';
         const outcome = receipt.outcome || 'Unknown';
@@ -357,47 +361,58 @@ function showReceipt(receipt) {
         const reasoning = receipt.reasoning || '';
         const files = receipt.linked_files || [];
         const time = receipt.classified_at ? new Date(receipt.classified_at).toLocaleString('en-AU') : '';
-
         const confClass = confidence >= 80 ? 'high' : confidence >= 60 ? 'medium' : 'low';
+        const subItemConf = receipt.sub_item_confidence ? Math.round(receipt.sub_item_confidence * 100) : 0;
 
         title.textContent = subject;
-        body.innerHTML = `<div class="event-detail">
-            <div class="event-detail-grid">
-                <span class="event-detail-label">Filed to</span>
-                <span class="event-detail-value">${escapeHtml(outcome)}</span>
 
-                <span class="event-detail-label">Confidence</span>
-                <span class="event-detail-value">
-                    <span class="event-detail-confidence">
-                        <span class="confidence-bar"><span class="confidence-fill ${confClass}" style="width:${confidence}%"></span></span>
-                        ${confidence}%
-                    </span>
-                </span>
+        let html = '<div class="event-detail"><div class="event-detail-grid">';
+        html += `<span class="event-detail-label">Filed to</span><span class="event-detail-value">${escapeHtml(outcome)}</span>`;
+        html += `<span class="event-detail-label">Confidence</span><span class="event-detail-value"><span class="event-detail-confidence"><span class="confidence-bar"><span class="confidence-fill ${confClass}" style="width:${confidence}%"></span></span> ${confidence}%</span></span>`;
 
-                ${sender ? `<span class="event-detail-label">From</span><span class="event-detail-value">${escapeHtml(sender)}</span>` : ''}
+        if (receipt.sub_item_name) {
+            html += `<span class="event-detail-label">Sub-item</span><span class="event-detail-value">${escapeHtml(receipt.sub_item_name)} (${subItemConf}%)</span>`;
+        }
+        if (sender) html += `<span class="event-detail-label">From</span><span class="event-detail-value">${escapeHtml(sender)}</span>`;
+        if (time) html += `<span class="event-detail-label">Processed</span><span class="event-detail-value">${time}</span>`;
+        html += `<span class="event-detail-label">Documents</span><span class="event-detail-value">${files.length} file${files.length !== 1 ? 's' : ''}</span>`;
+        html += '</div>';
 
-                ${time ? `<span class="event-detail-label">Processed</span><span class="event-detail-value">${time}</span>` : ''}
+        if (reasoning) html += `<div class="event-detail-reasoning">"${escapeHtml(reasoning)}"</div>`;
 
-                <span class="event-detail-label">Documents</span>
-                <span class="event-detail-value">${files.length} file${files.length !== 1 ? 's' : ''}</span>
-            </div>
+        // Skill section (if skill was executed)
+        if (receipt.skill_matched || receipt.skill_name) {
+            html += '<div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">';
+            html += `<div style="font-size:12px;font-weight:600;color:var(--green);margin-bottom:8px">📜 Skill: ${escapeHtml(receipt.skill_name || receipt.skill_matched)}</div>`;
+            if (receipt.skill_outcome) html += `<div style="font-size:12px;margin-bottom:4px">Outcome: <strong>${escapeHtml(receipt.skill_outcome)}</strong></div>`;
+            if (receipt.skill_analysis) html += `<div class="event-detail-reasoning">"${escapeHtml(receipt.skill_analysis)}"</div>`;
+            if (receipt.skill_metadata) {
+                const metaEntries = Object.entries(receipt.skill_metadata).filter(([k,v]) => v);
+                if (metaEntries.length > 0) {
+                    html += '<div style="margin-top:6px;font-size:11px">';
+                    metaEntries.forEach(([k, v]) => { html += `<div><span style="color:var(--text-dim)">${escapeHtml(k)}:</span> ${escapeHtml(String(v))}</div>`; });
+                    html += '</div>';
+                }
+            }
+            html += '</div>';
+        }
 
-            ${reasoning ? `<div class="event-detail-reasoning">"${escapeHtml(reasoning)}"</div>` : ''}
+        // Files
+        html += '<div class="event-detail-files"><div class="event-detail-files-title">Attached Files</div>';
+        html += files.filter(f => !f.startsWith('_')).map(f => {
+            const icon = f.endsWith('.pdf') ? '📄' : f.endsWith('.png') || f.endsWith('.jpg') ? '🖼' : '📎';
+            return `<div class="event-file-item"><span class="event-file-icon">${icon}</span>${escapeHtml(f)}</div>`;
+        }).join('');
+        html += '</div>';
 
-            <div class="event-detail-files">
-                <div class="event-detail-files-title">Attached Files</div>
-                ${files.filter(f => !f.startsWith('_')).map(f => {
-                    const icon = f.endsWith('.pdf') ? '📄' : f.endsWith('.png') || f.endsWith('.jpg') ? '🖼' : '📎';
-                    return `<div class="event-file-item"><span class="event-file-icon">${icon}</span>${escapeHtml(f)}</div>`;
-                }).join('')}
-            </div>
+        html += `<div class="event-detail-actions">
+            <button class="btn btn-primary" onclick="draftReply('${escapeHtml(receipt.event_id || '')}')">✉ Draft Reply</button>
+            <button class="btn btn-skip" onclick="closeModal()">Close</button>
+        </div></div>`;
 
-            <div class="event-detail-actions">
-                <button class="btn btn-primary" onclick="draftReply('${escapeHtml(receipt.event_id || '')}')">✉ Draft Reply</button>
-                <button class="btn btn-skip" onclick="closeModal()">Close</button>
-            </div>
-        </div>`;
+        body.innerHTML = html;
         body.style.whiteSpace = 'normal';
+        body.style.fontFamily = '';
     }
 
     modal.classList.add('open');
@@ -504,6 +519,7 @@ function resolveDisplayTitle(data) {
         if (redactPii && data.display_title_redacted) return data.display_title_redacted;
         if (data.display_title) return data.display_title;
     }
+    // Always prefer _subject over event_id
     return data._subject || data.event_id || '';
 }
 
@@ -796,17 +812,30 @@ function toggleAutoPoll() {
     }
 }
 
+let autoClassifyTimer = null;
+
 function toggleAutoClassify() {
     autoClassifyEnabled = document.getElementById('autoClassifyToggle').checked;
     updateServiceStatus(autoPollTimer !== null ? 'polling' : 'stopped');
 
-    // If toggled on and there are pending items, classify them now
     if (autoClassifyEnabled) {
         classifyAll(true);
+        // Start 15s interval timer
+        if (autoClassifyTimer) clearInterval(autoClassifyTimer);
+        autoClassifyTimer = setInterval(() => {
+            const pending = parseInt(document.getElementById('pendingCount').textContent || '0');
+            if (pending > 0 && !isClassifying) {
+                classifyAll(true);
+            }
+        }, 15000);
+    } else {
+        if (autoClassifyTimer) { clearInterval(autoClassifyTimer); autoClassifyTimer = null; }
     }
 }
 
 function stopAllServices() {
+    // Stop classify timer
+    if (autoClassifyTimer) { clearInterval(autoClassifyTimer); autoClassifyTimer = null; }
     // Stop poll timer
     if (autoPollTimer !== null) {
         clearInterval(autoPollTimer);
@@ -936,7 +965,6 @@ async function classifyAll(skipPendingCheck) {
     } catch (e) {}
 
     // Get pending events from current state
-    clearPipelineEvents();
     const pendingIds = [];
     const pendingSubjects = {};
     if (currentState && currentState.pending) {
@@ -958,125 +986,97 @@ async function classifyAll(skipPendingCheck) {
 
     try {
         for (const eventId of pendingIds) {
-            let skillMatched = null;
-            let skillResult = null;
             let eventTitles = {};
 
-            // Call 1: Skill Match (if enabled)
-            if (skillsEnabled) {
-                updatePipelineStage(eventId, 'matching', 'active');
-                try {
-                    const matchResp = await fetch(`/api/skill-match/${eventId}`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ generate_title: eventDisplayMode === 'agent_title' }),
-                    });
-                    const matchData = await matchResp.json();
-                    const sid = matchData.skill_id;
-                    const conf = matchData.confidence || 0;
-
-                    // Capture agent-generated titles from Call 1
-                    if (matchData.display_title) {
-                        eventTitles = {
-                            display_title: matchData.display_title,
-                            display_title_redacted: matchData.display_title_redacted || matchData.display_title,
-                        };
-                    }
-
-                    const titleLabel = resolveDisplayTitle({
-                        event_id: eventId,
-                        _subject: pendingSubjects[eventId],
-                        ...eventTitles,
-                    });
-
-                    // Immediately update pipeline card title after Call 1
-                    const pipeCard = document.getElementById(`pipeline-${eventId}`);
-                    if (pipeCard) {
-                        const pipeTitle = pipeCard.querySelector('.pipeline-event-title');
-                        if (pipeTitle && titleLabel !== eventId) {
-                            pipeTitle.textContent = titleLabel;
-                            pipeTitle.dataset.subject = titleLabel;
-                        }
-                    }
-
-                    if (sid && sid !== 'none' && sid !== 'N/A' && conf >= 0.8) {
-                        skillMatched = sid;
-                        updatePipelineStage(eventId, 'matching', 'done', `✓ ${sid}`);
-                        addClassifyLog(`🎯 ${titleLabel}: skill "${sid}" (${conf.toFixed(2)})`, 'info');
-
-                        // Call 2: Scroll Execution
-                        updatePipelineStage(eventId, 'scroll', 'active', `${sid}_scroll...`);
-                        try {
-                            const scrollResp = await fetch(`/api/skill-execute/${eventId}`, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ skill_id: sid }),
-                            });
-                            skillResult = await scrollResp.json();
-                            updatePipelineStage(eventId, 'scroll', 'done', `✓ ${sid}_scroll`);
-                            const scrollLabel = resolveDisplayTitle({ event_id: eventId, _subject: pendingSubjects[eventId], ...eventTitles });
-                            addClassifyLog(`📜 ${scrollLabel}: ${skillResult.request_type || '?'} → ${skillResult.outcome || '?'}`, 'info');
-                        } catch (e) {
-                            updatePipelineStage(eventId, 'scroll', 'done', '✗ error');
-                        }
-                    } else {
-                        updatePipelineStage(eventId, 'matching', 'skipped', 'no match');
-                        updatePipelineStage(eventId, 'scroll', 'skipped');
-                    }
-                } catch (e) {
-                    updatePipelineStage(eventId, 'matching', 'skipped', 'error');
-                    updatePipelineStage(eventId, 'scroll', 'skipped');
-                }
-            } else {
-                updatePipelineStage(eventId, 'matching', 'skipped', 'off');
-                updatePipelineStage(eventId, 'scroll', 'skipped', 'off');
-            }
-
-            // Call 3: Classification
+            // Call 1: Classification (folder + sub-item)
             updatePipelineStage(eventId, 'classify', 'active');
             try {
                 const classResp = await fetch(`/api/classify-single/${eventId}`, { method: 'POST' });
                 const classData = await classResp.json();
 
-                classData.skill_matched = skillMatched;
-                classData.skill_request_type = skillResult ? skillResult.request_type : null;
-                classData.skill_outcome = skillResult ? skillResult.outcome : null;
-                classData.skill_analysis = skillResult ? skillResult.analysis : null;
-                classData.skill_metadata = skillResult ? skillResult.metadata : null;
-                classData.skill_confidence = skillResult ? skillResult.confidence : null;
-                classData.skill_response_key = skillResult ? skillResult.response_template_key : null;
                 classData._subject = pendingSubjects[eventId] || classData._subject || eventId;
-                classData.display_title = eventTitles.display_title || '';
-                classData.display_title_redacted = eventTitles.display_title_redacted || '';
+                classData.display_title = classData.display_title || '';
+                classData.display_title_redacted = classData.display_title_redacted || '';
 
-                // Resolve the friendly label from all available sources
+                // Resolve display: use display_title from classification if available
                 const friendlyLabel = resolveDisplayTitle(classData);
 
-                updatePipelineStage(eventId, 'classify', 'done');
-                updatePipelineStage(eventId, 'dispatch', 'done');
+                updatePipelineStage(eventId, 'classify', 'done', '✓ Classified');
 
-                // Update pipeline title with subject
+                // Show folder name
+                if (classData.outcome && classData.outcome !== 'Undetermined') {
+                    updatePipelineStage(eventId, 'folder', 'done', classData.outcome);
+                } else {
+                    updatePipelineStage(eventId, 'folder', 'skipped', 'Undetermined');
+                }
+
+                // Call 2: Sub-item skill execution
+                if (classData.sub_item_id && classData.sub_item_id !== 'other' && classData.outcome !== 'Undetermined') {
+                    updatePipelineStage(eventId, 'skill', 'active', `${classData.sub_item_id}...`);
+                    try {
+                        const folderKey = findFolderKeyByName(classData.outcome);
+                        const skillResp = await fetch(`/api/skill-execute-sub/${eventId}`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ folder_key: folderKey, sub_item_id: classData.sub_item_id }),
+                        });
+                        const skillData = await skillResp.json();
+                        if (skillData.skill_matched) {
+                            classData.skill_matched = skillData.skill_id;
+                            classData.skill_outcome = skillData.outcome;
+                            classData.skill_analysis = skillData.analysis;
+                            classData.skill_metadata = skillData.metadata;
+                            classData.skill_name = skillData.skill_name;
+                            updatePipelineStage(eventId, 'skill', 'done', `✓ ${skillData.skill_name || classData.sub_item_id}`);
+                            addClassifyLog(`📜 ${friendlyLabel}: ${skillData.outcome || '?'}`, 'info');
+                        } else {
+                            updatePipelineStage(eventId, 'skill', 'skipped', 'no skill');
+                        }
+                    } catch (e) {
+                        updatePipelineStage(eventId, 'skill', 'skipped', 'error');
+                    }
+                } else {
+                    updatePipelineStage(eventId, 'skill', 'skipped', classData.sub_item_id ? 'other' : 'N/A');
+                }
+
+                // Show confidence with color coding
+                const confPct = Math.round((classData.confidence || 0) * 100);
+                const confColor = confPct >= 90 ? 'var(--green)' : confPct >= 70 ? 'var(--amber)' : 'var(--red)';
+                const confStage = document.querySelector(`#pipeline-${eventId} .pipeline-stage[data-stage="confidence"]`);
+                if (confStage) {
+                    confStage.classList.add('done');
+                    confStage.style.color = confColor;
+                    confStage.style.fontWeight = '700';
+                    confStage.textContent = `${confPct}%`;
+                }
+
+                // Update pipeline title — show display_title after classification
                 const card = document.getElementById(`pipeline-${eventId}`);
                 if (card) {
                     const title = card.querySelector('.pipeline-event-title');
                     if (title) {
-                        // Update stored subject for future use
                         title.dataset.subject = friendlyLabel;
-                        title.innerHTML = `${escapeHtml(friendlyLabel)} <span class="pipeline-arrow">→</span> <span style="color:var(--green)">${escapeHtml(classData.outcome)}</span>`;
+                        const subLabel = classData.sub_item_name ? ` [${classData.sub_item_name}]` : '';
+                        title.innerHTML = `${escapeHtml(friendlyLabel)} <span class="pipeline-arrow">→</span> <span style="color:var(--green)">${escapeHtml(classData.outcome)}${subLabel}</span>`;
                     }
                 }
                 pipelineResults[eventId] = classData;
 
+                // Classification log — use friendlyLabel (display_title or _subject)
                 if (classData.outcome === 'Undetermined') {
                     addClassifyLog(`❓ ${friendlyLabel} → Undetermined`, 'error');
                     activateRoute('undetermined');
                 } else {
-                    addClassifyLog(`✓ ${friendlyLabel} → ${classData.outcome} (${classData.confidence})`, 'success');
+                    const subInfo = classData.sub_item_name ? ` [${classData.sub_item_name}]` : '';
+                    addClassifyLog(`✓ ${friendlyLabel} → ${classData.outcome}${subInfo} (${classData.confidence})`, 'success');
                     const folderKey = findFolderKeyByName(classData.outcome);
                     if (folderKey) activateRoute(folderKey);
                 }
 
                 allResults.push(classData);
+
+                // Save pipeline history to localStorage
+                savePipelineHistory();
 
                 // Persist agent titles into the classification receipt (fire-and-forget)
                 if (eventTitles.display_title && classData.moved) {
@@ -1137,8 +1137,12 @@ async function loadSettings() {
         document.getElementById('settingsSkillsToggle').checked = data.skills_enabled || false;
         document.getElementById('settingsEventDisplay').value = eventDisplayMode;
         document.getElementById('settingsRedactPii').checked = redactPii;
+        document.getElementById('settingsPipelineHistory').value = pipelineHistoryMax;
         const redactRow = document.getElementById('redactPiiRow');
         if (redactRow) redactRow.style.display = eventDisplayMode === 'agent_title' ? '' : 'none';
+        loadModelSelector();
+        const demoSafeEl = document.getElementById('settingsDemoSafe');
+        if (demoSafeEl) demoSafeEl.checked = demoSafeMode;
     } catch (err) {
         console.error('Failed to load settings:', err);
     }
@@ -1907,6 +1911,9 @@ function addPipelineEvent(eventId, initialStage, subject) {
     const container = document.getElementById('pipelineEvents');
     if (!container) return;
 
+    // Skip if already exists
+    if (document.getElementById(`pipeline-${eventId}`)) return;
+
     const empty = container.querySelector('.activity-empty');
     if (empty) empty.remove();
 
@@ -1920,24 +1927,30 @@ function addPipelineEvent(eventId, initialStage, subject) {
     card.innerHTML = `
         <div class="pipeline-event-title" data-event-id="${escapeAttr(eventId)}" data-subject="${escapeAttr(subject || '')}">${escapeHtml(displayName)}</div>
         <div class="pipeline-stages">
-            <span class="pipeline-stage active" data-stage="matching">
-                <span class="stage-spinner"></span>Skill Match
-            </span>
-            <span class="pipeline-arrow">→</span>
-            <span class="pipeline-stage" data-stage="scroll">
-                <span class="stage-spinner"></span>Scroll
-            </span>
-            <span class="pipeline-arrow">→</span>
-            <span class="pipeline-stage" data-stage="classify">
+            <span class="pipeline-stage active" data-stage="classify">
                 <span class="stage-spinner"></span>Classify
             </span>
             <span class="pipeline-arrow">→</span>
-            <span class="pipeline-stage" data-stage="dispatch">
-                <span class="stage-spinner"></span>Route
+            <span class="pipeline-stage" data-stage="folder">
+                <span class="stage-spinner"></span>Folder
+            </span>
+            <span class="pipeline-arrow">→</span>
+            <span class="pipeline-stage" data-stage="skill">
+                <span class="stage-spinner"></span>Skill
+            </span>
+            <span class="pipeline-arrow">→</span>
+            <span class="pipeline-stage" data-stage="confidence">
+                —
             </span>
         </div>
     `;
     container.insertBefore(card, container.firstChild);
+
+    // Trim to max visible items
+    const maxItems = pipelineHistoryMax || 5;
+    while (container.children.length > maxItems) {
+        container.removeChild(container.lastChild);
+    }
 }
 
 function completePipelineEvent(eventId, outcome, resultData) {
@@ -1989,70 +2002,7 @@ function updatePipelineStage(eventId, stageName, state, label) {
 function showPipelineDetail(eventId) {
     const data = pipelineResults[eventId];
     if (!data) return;
-
-    const modal = document.getElementById('modalOverlay');
-    const body = document.getElementById('modalBody');
-    const title = document.getElementById('modalTitle');
-
-    if (devMode) {
-        title.textContent = `Pipeline Result — ${eventId}`;
-        body.innerHTML = '';
-        body.textContent = JSON.stringify(data, null, 2);
-        body.style.whiteSpace = 'pre-wrap';
-    } else {
-        const pipelineSubject = resolveDisplayTitle(data);
-        title.textContent = `Pipeline Summary — ${pipelineSubject}`;
-
-        const skill = data.skill_matched;
-        const reqType = data.skill_request_type;
-        const skillOutcome = data.skill_outcome;
-        const skillAnalysis = data.skill_analysis;
-        const classification = data.outcome;
-        const confidence = data.confidence ? Math.round(data.confidence * 100) : 0;
-        const confClass = confidence >= 80 ? 'high' : confidence >= 60 ? 'medium' : 'low';
-
-        let html = '<div class="event-detail">';
-
-        // Step 1: Skill Match
-        html += '<div class="pipeline-detail-step">';
-        html += '<div class="pipeline-detail-step-num">1</div>';
-        html += '<div class="pipeline-detail-step-content">';
-        html += '<div class="pipeline-detail-step-title">Skill Matching</div>';
-        if (skill) {
-            html += `<div class="pipeline-detail-step-result success">Matched: <strong>${escapeHtml(skill)}</strong></div>`;
-        } else {
-            html += '<div class="pipeline-detail-step-result dimmed">No skill matched — classification only</div>';
-        }
-        html += '</div></div>';
-
-        // Step 2: Scroll Execution
-        if (skill) {
-            html += '<div class="pipeline-detail-step">';
-            html += '<div class="pipeline-detail-step-num">2</div>';
-            html += '<div class="pipeline-detail-step-content">';
-            html += `<div class="pipeline-detail-step-title">${escapeHtml(skill)}_scroll executed</div>`;
-            if (reqType) html += `<div>Request Type: <strong>${escapeHtml(reqType)}</strong></div>`;
-            if (skillOutcome) html += `<div>Outcome: <strong>${escapeHtml(skillOutcome)}</strong></div>`;
-            if (skillAnalysis) html += `<div class="event-detail-reasoning">"${escapeHtml(skillAnalysis)}"</div>`;
-            html += '</div></div>';
-        }
-
-        // Step 3: Classification
-        html += '<div class="pipeline-detail-step">';
-        html += `<div class="pipeline-detail-step-num">${skill ? '3' : '2'}</div>`;
-        html += '<div class="pipeline-detail-step-content">';
-        html += '<div class="pipeline-detail-step-title">Classification</div>';
-        html += `<div>Destination: <strong>${escapeHtml(classification)}</strong></div>`;
-        html += `<div>Confidence: <span class="event-detail-confidence"><span class="confidence-bar"><span class="confidence-fill ${confClass}" style="width:${confidence}%"></span></span> ${confidence}%</span></div>`;
-        if (data.reasoning) html += `<div class="event-detail-reasoning">"${escapeHtml(data.reasoning)}"</div>`;
-        html += '</div></div>';
-
-        html += '</div>';
-        body.innerHTML = html;
-        body.style.whiteSpace = 'normal';
-    }
-
-    modal.classList.add('open');
+    showReceipt(data);
 }
 
 /* ── Resizable Panels ── */
@@ -2957,6 +2907,13 @@ async function extractDocTypes() {
             status.className = 'form-status success';
             status.textContent = `✓ ${schemaWizardDocs.length} document types detected (${data.latency_ms}ms)`;
             renderSchemaDocList();
+
+            // Auto-save to folder schema so it persists across wizard sessions
+            fetch(`/api/forge/documents/${schemaWizardFolderKey}/save`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ documents: schemaWizardDocs }),
+            }).catch(() => {});
         }
     } catch (err) {
         status.className = 'form-status error';
@@ -3036,3 +2993,218 @@ async function generateFieldsFromInstruction(docIndex) {
     btnEl.disabled = false;
     btnEl.textContent = '✓';
 }
+
+/* ── Pipeline History Persistence ── */
+
+let pipelineHistoryMax = parseInt(localStorage.getItem('pipelineHistoryMax') || '5');
+
+function savePipelineHistoryCount() {
+    const val = parseInt(document.getElementById('settingsPipelineHistory').value) || 5;
+    pipelineHistoryMax = Math.max(1, Math.min(50, val));
+    localStorage.setItem('pipelineHistoryMax', pipelineHistoryMax);
+}
+
+function savePipelineHistory() {
+    // Save the last N pipeline results to localStorage
+    const keys = Object.keys(pipelineResults).slice(-pipelineHistoryMax);
+    const history = {};
+    keys.forEach(k => { history[k] = pipelineResults[k]; });
+    localStorage.setItem('pipelineHistory', JSON.stringify(history));
+}
+
+function loadPipelineHistory() {
+    try {
+        const saved = JSON.parse(localStorage.getItem('pipelineHistory') || '{}');
+        const entries = Object.entries(saved);
+        if (entries.length === 0) return;
+
+        const container = document.getElementById('pipelineEvents');
+        if (!container) return;
+        const empty = container.querySelector('.activity-empty');
+        if (empty) empty.remove();
+
+        entries.forEach(([eventId, data]) => {
+            pipelineResults[eventId] = data;
+            const card = document.createElement('div');
+            card.className = 'pipeline-event';
+            card.id = `pipeline-${eventId}`;
+            card.style.cursor = 'pointer';
+            card.onclick = () => showPipelineDetail(eventId);
+
+            const label = resolveDisplayTitle(data);
+            const outcome = data.outcome || '?';
+            const subLabel = data.sub_item_name ? ` [${data.sub_item_name}]` : '';
+            const confPct = Math.round((data.confidence || 0) * 100);
+            const confColor = confPct >= 90 ? 'var(--green)' : confPct >= 70 ? 'var(--amber)' : 'var(--red)';
+
+            card.innerHTML = `
+                <div class="pipeline-event-title">${escapeHtml(label)} <span class="pipeline-arrow">→</span> <span style="color:var(--green)">${escapeHtml(outcome)}${subLabel}</span></div>
+                <div class="pipeline-stages">
+                    <span class="pipeline-stage done" data-stage="classify">✓ Classified</span>
+                    <span class="pipeline-arrow">→</span>
+                    <span class="pipeline-stage done" data-stage="folder">${escapeHtml(outcome)}</span>
+                    <span class="pipeline-arrow">→</span>
+                    <span class="pipeline-stage ${data.skill_matched ? 'done' : 'skipped'}" data-stage="skill">${data.skill_name ? '✓ ' + escapeHtml(data.skill_name) : 'N/A'}</span>
+                    <span class="pipeline-arrow">→</span>
+                    <span class="pipeline-stage done" data-stage="confidence" style="color:${confColor};font-weight:700">${confPct}%</span>
+                </div>
+            `;
+            container.appendChild(card);
+        });
+    } catch (e) {}
+}
+
+// Load history on page load
+document.addEventListener('DOMContentLoaded', () => {
+    loadPipelineHistory();
+    const histInput = document.getElementById('settingsPipelineHistory');
+    if (histInput) histInput.value = pipelineHistoryMax;
+});
+
+/* ── Demo Mode ── */
+
+let demoTimer = null;
+let demoRunning = false;
+
+async function startDemo() {
+    if (demoRunning) return;
+
+    // Take snapshot first
+    const snapResp = await fetch('/api/demo/snapshot', { method: 'POST' });
+    const snapData = await snapResp.json();
+    if (!snapData.success) {
+        alert('Failed to create snapshot: ' + (snapData.error || ''));
+        return;
+    }
+
+    demoRunning = true;
+    updateDemoUI();
+    addPollLog('🎬 Demo started — pushing events every 20-30s', 'info');
+    demoPushOne();
+}
+
+function stopDemo() {
+    if (demoTimer) clearTimeout(demoTimer);
+    demoTimer = null;
+    demoRunning = false;
+    updateDemoUI();
+    addPollLog('⏹ Demo stopped', '');
+}
+
+async function demoPushOne() {
+    if (!demoRunning) return;
+
+    try {
+        const resp = await fetch('/api/demo/push-one', { method: 'POST' });
+        const data = await resp.json();
+        if (data.success) {
+            addPollLog(`🎬 → ${data.subject || data.event_id}`, 'success');
+            pulseReceiver();
+            loadState();
+        } else {
+            addPollLog(`🎬 ✗ ${data.error}`, 'error');
+        }
+    } catch (err) {
+        addPollLog(`🎬 ✗ ${err.message}`, 'error');
+    }
+
+    // Schedule next push (interval depends on model speed)
+    if (demoRunning) {
+        // Check current model — faster interval for lighter models
+        let minDelay = 20000;
+        let maxDelay = 30000;
+        try {
+            const modelResp = await fetch('/api/models');
+            const modelData = await modelResp.json();
+            if (modelData.active && modelData.active.includes('9b')) {
+                minDelay = 5000;
+                maxDelay = 10000;
+            }
+        } catch (e) {}
+        const delay = minDelay + Math.random() * (maxDelay - minDelay);
+        demoTimer = setTimeout(demoPushOne, delay);
+    }
+}
+
+async function restoreDemo() {
+    if (demoRunning) stopDemo();
+    if (!confirm('Restore to pre-demo state? This will undo all demo changes.')) return;
+
+    try {
+        const resp = await fetch('/api/demo/restore', { method: 'POST' });
+        const data = await resp.json();
+        if (data.success) {
+            addPollLog('↩ Demo state restored', 'success');
+            loadState();
+        } else {
+            alert('Restore failed: ' + (data.error || ''));
+        }
+    } catch (err) {
+        alert('Error: ' + err.message);
+    }
+}
+
+function updateDemoUI() {
+    const btn = document.getElementById('demoBtn');
+    if (btn) {
+        if (demoRunning) {
+            btn.textContent = '⏹ Stop Demo';
+            btn.onclick = stopDemo;
+            btn.style.borderColor = 'rgba(239,68,68,0.3)';
+            btn.style.color = 'var(--red)';
+        } else {
+            btn.textContent = '🎬 Demo';
+            btn.onclick = startDemo;
+            btn.style.borderColor = 'rgba(245,158,11,0.3)';
+            btn.style.color = 'var(--amber)';
+        }
+    }
+}
+
+/* ── Model Selection ── */
+
+async function loadModelSelector() {
+    try {
+        const data = await fetch('/api/models').then(r => r.json());
+        const select = document.getElementById('settingsModelSelect');
+        if (!select) return;
+        select.innerHTML = '';
+        (data.models || []).forEach(m => {
+            const opt = document.createElement('option');
+            opt.value = m.id;
+            opt.textContent = m.name;
+            if (m.id === data.active) opt.selected = true;
+            select.appendChild(opt);
+        });
+        select.onchange = async () => {
+            await fetch('/api/models/switch', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ model_id: select.value }),
+            });
+        };
+    } catch (e) {}
+}
+
+document.addEventListener('DOMContentLoaded', loadModelSelector);
+
+/* ── Demo Safe Mode ── */
+
+let demoSafeMode = localStorage.getItem('demoSafeMode') === 'true';
+
+function toggleDemoSafe() {
+    demoSafeMode = document.getElementById('settingsDemoSafe').checked;
+    localStorage.setItem('demoSafeMode', demoSafeMode);
+    loadState();
+}
+
+// Override escapeHtml to apply demo safe replacements
+const _originalEscapeHtml = escapeHtml;
+escapeHtml = function(str) {
+    let result = _originalEscapeHtml(str);
+    if (demoSafeMode) {
+        result = result.replace(/Cessnock/gi, 'Test Council');
+        result = result.replace(/cessnock/gi, 'test council');
+    }
+    return result;
+};

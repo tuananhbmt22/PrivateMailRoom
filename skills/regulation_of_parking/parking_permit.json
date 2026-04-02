@@ -1,0 +1,25 @@
+{
+  "sub_item_id": "parking_permit",
+  "folder_key": "regulation_of_parking",
+  "name": "Parking Permit",
+  "description": "Sender is applying for or renewing a parking permit",
+  "checks": [
+    "Is a residential address provided?",
+    "Is this a new application or renewal?",
+    "Are required documents mentioned (proof of residency, rego)?"
+  ],
+  "outcomes": {
+    "permit_application": "New permit application with sufficient details",
+    "permit_renewal": "Renewal request",
+    "permit_incomplete": "Missing required information"
+  },
+  "metadata_fields": {
+    "location": "Residential address",
+    "is_renewal": "Whether this is a renewal (true/false)"
+  },
+  "response_templates": {
+    "permit_application": "Thank you for your parking permit application for {location}. It will be processed within 10 business days.",
+    "permit_renewal": "Thank you for your permit renewal request for {location}. It will be processed within 5 business days.",
+    "permit_incomplete": "Thank you for your parking permit enquiry. To process your application, we require: {missing_items}."
+  }
+}

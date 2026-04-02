@@ -1,0 +1,18 @@
+{
+  "sub_item_id": "_default",
+  "folder_key": "waste_management_operations",
+  "name": "Waste Management — General",
+  "description": "Default skill for waste events that don't match a specific sub-item",
+  "checks": [
+    "What is the sender's waste-related request?"
+  ],
+  "outcomes": {
+    "general_waste": "General waste management enquiry"
+  },
+  "metadata_fields": {
+    "request_summary": "Brief summary"
+  },
+  "response_templates": {
+    "general_waste": "Thank you for your waste management enquiry. It has been received and will be reviewed."
+  }
+}

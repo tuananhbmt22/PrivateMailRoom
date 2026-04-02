@@ -183,6 +183,19 @@ def scan_folder_events(council_dir: Path, folder_path: str) -> list[dict[str, An
             except (json.JSONDecodeError, OSError):
                 pass
 
+        # Merge skill result into receipt if available
+        skill_path = event_dir / "_skill_result.json"
+        if receipt and skill_path.is_file():
+            try:
+                skill_data = json.loads(skill_path.read_text())
+                receipt["skill_matched"] = skill_data.get("skill_id")
+                receipt["skill_name"] = skill_data.get("skill_name")
+                receipt["skill_outcome"] = skill_data.get("outcome")
+                receipt["skill_analysis"] = skill_data.get("analysis")
+                receipt["skill_metadata"] = skill_data.get("metadata")
+            except (json.JSONDecodeError, OSError):
+                pass
+
         display = extract_event_display(event_dir)
 
         events.append({
@@ -195,6 +208,59 @@ def scan_folder_events(council_dir: Path, folder_path: str) -> list[dict[str, An
             "receipt": receipt,
         })
     return events
+
+
+def _parse_llm_json(raw: str, expect_array: bool = False) -> Any:
+    """Parse JSON from an LLM response, handling fences, trailing text, and reasoning_content.
+
+    Args:
+        raw: Raw LLM response content.
+        expect_array: If True, look for [...] array instead of {...} object.
+
+    Returns:
+        Parsed dict/list, or None if parsing fails.
+    """
+    import re as _re
+
+    content = raw.strip()
+    if not content:
+        return None
+
+    # Strip markdown code fences
+    if "```" in content:
+        open_char = r"\[" if expect_array else r"\{"
+        close_char = r"\]" if expect_array else r"\}"
+        fence_match = _re.search(
+            r"```(?:json)?\s*(" + open_char + r"[\s\S]*?" + close_char + r")\s*```",
+            content,
+        )
+        if fence_match:
+            content = fence_match.group(1)
+
+    # Extract first complete JSON object/array by brace/bracket counting
+    open_ch = '[' if expect_array else '{'
+    close_ch = ']' if expect_array else '}'
+    depth = 0
+    start_idx = -1
+    for i, ch in enumerate(content):
+        if ch == open_ch:
+            if start_idx == -1:
+                start_idx = i
+            depth += 1
+        elif ch == close_ch:
+            depth -= 1
+            if depth == 0 and start_idx >= 0:
+                try:
+                    return json.loads(content[start_idx:i + 1])
+                except json.JSONDecodeError:
+                    pass
+                break
+
+    # Last resort: try parsing the whole thing
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError:
+        return None
 
 
 def _save_last_llm_response(council_dir: Path, folder_key: str, endpoint: str, content: str) -> None:
@@ -1592,8 +1658,13 @@ def register_routes(app: Flask) -> None:
         return jsonify({
             "event_id": classification.event_id,
             "outcome": classification.outcome,
+            "sub_item_id": classification.sub_item_id,
+            "sub_item_name": classification.sub_item_name,
             "confidence": round(classification.confidence, 2),
+            "sub_item_confidence": round(classification.sub_item_confidence, 2),
             "reasoning": classification.reasoning,
+            "display_title": classification.display_title,
+            "display_title_redacted": classification.display_title_redacted,
             "moved": dispatch_result.moved if dispatch_result else False,
             "_subject": display["subject"],
             "_sender": display["sender"],
@@ -2140,37 +2211,8 @@ def register_routes(app: Flask) -> None:
         # Save last LLM response for debug/retry
         _save_last_llm_response(app.config["COUNCIL_DIR"], "forge", "generate_triggers", response.content)
 
-        # Parse response — extract first JSON object, ignore trailing text
-        content = response.content.strip()
-
-        # Strip markdown code fences
-        if "```" in content:
-            import re as _re
-            # Find content between first ``` and next ```
-            fence_match = _re.search(r"```(?:json)?\s*(\{[\s\S]*?\})\s*```", content)
-            if fence_match:
-                content = fence_match.group(1)
-            else:
-                content = _re.sub(r"^```(?:json)?\s*", "", content)
-                content = _re.sub(r"\s*```[\s\S]*$", "", content)
-
-        # Extract first complete JSON object
-        brace_count = 0
-        start_idx = -1
-        for i, ch in enumerate(content):
-            if ch == '{':
-                if start_idx == -1:
-                    start_idx = i
-                brace_count += 1
-            elif ch == '}':
-                brace_count -= 1
-                if brace_count == 0 and start_idx >= 0:
-                    content = content[start_idx:i + 1]
-                    break
-
-        try:
-            result = json.loads(content)
-        except json.JSONDecodeError:
+        result = _parse_llm_json(response.content)
+        if not result:
             return jsonify({
                 "triggers": [],
                 "exclusions": [],
@@ -2350,29 +2392,8 @@ def register_routes(app: Flask) -> None:
         # Save last LLM response for debug/retry
         _save_last_llm_response(council_dir, folder_key, "extract_doc_types", response.content)
 
-        # Parse response — extract first JSON object
-        content = response.content.strip()
-        if "```" in content:
-            fence_match = _re.search(r"```(?:json)?\s*(\{[\s\S]*?\})\s*```", content)
-            if fence_match:
-                content = fence_match.group(1)
-
-        brace_count = 0
-        start_idx = -1
-        for i, ch in enumerate(content):
-            if ch == '{':
-                if start_idx == -1:
-                    start_idx = i
-                brace_count += 1
-            elif ch == '}':
-                brace_count -= 1
-                if brace_count == 0 and start_idx >= 0:
-                    content = content[start_idx:i + 1]
-                    break
-
-        try:
-            result = json.loads(content)
-        except json.JSONDecodeError:
+        result = _parse_llm_json(response.content)
+        if not result:
             return jsonify({
                 "document_types": [],
                 "unmatched_files": filenames,
@@ -2456,32 +2477,8 @@ def register_routes(app: Flask) -> None:
         folder_key_for_save = data.get("folder_key", "forge")
         _save_last_llm_response(app.config["COUNCIL_DIR"], folder_key_for_save, "generate_fields", response.content)
 
-        # Parse response — extract JSON array
-        content = response.content.strip()
-        if "```" in content:
-            fence_match = _re.search(r"```(?:json)?\s*(\[[\s\S]*?\])\s*```", content)
-            if fence_match:
-                content = fence_match.group(1)
-
-        # Find first [ ... ] array
-        bracket_count = 0
-        start_idx = -1
-        for i, ch in enumerate(content):
-            if ch == '[':
-                if start_idx == -1:
-                    start_idx = i
-                bracket_count += 1
-            elif ch == ']':
-                bracket_count -= 1
-                if bracket_count == 0 and start_idx >= 0:
-                    content = content[start_idx:i + 1]
-                    break
-
-        try:
-            fields = json.loads(content)
-            if not isinstance(fields, list):
-                fields = []
-        except json.JSONDecodeError:
+        fields = _parse_llm_json(response.content, expect_array=True)
+        if not fields or not isinstance(fields, list):
             return jsonify({
                 "fields": [],
                 "error": "Failed to parse LLM response",
@@ -2493,3 +2490,288 @@ def register_routes(app: Flask) -> None:
             "latency_ms": round(response.latency_ms),
             "tokens": response.tokens_used,
         })
+
+    @app.route("/api/skill-execute-sub/<event_id>", methods=["POST"])
+    def api_skill_execute_sub(event_id: str):
+        """Execute a sub-item micro-skill on an event.
+
+        Looks up skills/{folder_key}/{sub_item_id}.json, falls back to _default.json.
+        """
+        from engine.classifier import read_event, build_user_message
+        from engine.llm import LLMConfig, LocalLLM
+
+        data = request.get_json() or {}
+        folder_key = data.get("folder_key", "")
+        sub_item_id = data.get("sub_item_id", "")
+
+        if not folder_key or not sub_item_id:
+            return jsonify({"error": "folder_key and sub_item_id required"}), 400
+
+        council_dir = app.config["COUNCIL_DIR"]
+        event_dir = council_dir / "receive_channel" / event_id
+
+        # Event might already be dispatched — search in department folder
+        if not event_dir.is_dir():
+            folder_map = app.config["COUNCIL_CONFIG"].get("folder_map", {})
+            relative_path = folder_map.get(folder_key)
+            if relative_path:
+                dept_dir = council_dir / relative_path
+                if dept_dir.is_dir():
+                    for candidate in dept_dir.iterdir():
+                        if candidate.is_dir() and candidate.name.startswith(event_id):
+                            event_dir = candidate
+                            break
+
+        if not event_dir.is_dir():
+            return jsonify({"error": "Event not found"}), 404
+
+        # Load sub-item skill
+        skill_path = BASE_DIR / "skills" / folder_key / f"{sub_item_id}.json"
+        if not skill_path.is_file():
+            skill_path = BASE_DIR / "skills" / folder_key / "_default.json"
+        if not skill_path.is_file():
+            return jsonify({"error": f"No skill found for {folder_key}/{sub_item_id}", "skill_matched": False})
+
+        try:
+            skill = json.loads(skill_path.read_text())
+        except (json.JSONDecodeError, OSError) as exc:
+            return jsonify({"error": f"Failed to load skill: {exc}"}), 500
+
+        # Read event content
+        event = read_event(event_dir)
+        event_text = build_user_message(event)
+
+        # Build skill prompt
+        skill_prompt = f"""You are a council mailroom skill agent. Execute the skill on the event.
+DO NOT explain your reasoning. DO NOT think step by step. Return ONLY the JSON object immediately.
+
+SKILL: {skill.get('name', '')}
+DESCRIPTION: {skill.get('description', '')}
+
+CHECKS:
+{chr(10).join('- ' + c for c in skill.get('checks', []))}
+
+OUTCOMES:
+{chr(10).join(f'- {k}: {v}' for k, v in skill.get('outcomes', {}).items())}
+
+EXTRACT:
+{chr(10).join(f'- {k}: {v}' for k, v in skill.get('metadata_fields', {}).items())}
+
+Return ONLY this JSON. Nothing else:
+{{"outcome": "<code>", "metadata": {{"field": "value"}}, "analysis": "<1 sentence>", "missing_info": []}}"""
+
+        llm_config = LLMConfig.from_yaml(CONFIG_DIR / "llm.yaml")
+        llm = LocalLLM(llm_config)
+        response = llm.infer(skill_prompt, event_text, use_json_schema=False, max_tokens_override=2048)
+        llm.close()
+
+        if not response.success:
+            return jsonify({"error": f"Skill execution failed: {response.error}", "skill_matched": True})
+
+        # Parse response
+        result = _parse_llm_json(response.content)
+        if not result:
+            # Try to extract partial data from reasoning if available
+            import re as _re
+            content = response.content
+            # Look for outcome mentions in reasoning text
+            outcome_match = _re.search(r'`?(\w+_\w+)`?\s*[:.]', content)
+            location_match = _re.search(r'[Ll]ocation[:\s]*["\']?([^"\'}\n]+)', content)
+            safety_match = _re.search(r'safety.*(true|yes|urgent)', content, _re.IGNORECASE)
+
+            result = {
+                "outcome": outcome_match.group(1) if outcome_match else "needs_review",
+                "analysis": "Response was incomplete — extracted partial data from reasoning",
+                "metadata": {},
+                "missing_info": ["Complete skill analysis (model response truncated)"],
+            }
+            if location_match:
+                result["metadata"]["location"] = location_match.group(1).strip()
+            if safety_match:
+                result["metadata"]["safety_concern"] = True
+
+        result["skill_matched"] = True
+        result["skill_id"] = sub_item_id
+        result["skill_name"] = skill.get("name", sub_item_id)
+        result["folder_key"] = folder_key
+        result["latency_ms"] = round(response.latency_ms)
+        result["tokens"] = response.tokens_used
+
+        # Save skill result to event folder
+        skill_result_path = event_dir / "_skill_result.json"
+        skill_result_path.write_text(json.dumps(result, indent=2))
+
+        return jsonify(result)
+
+    # ── Demo Mode Endpoints ─────────────────────────────────────────────────
+
+    @app.route("/api/demo/snapshot", methods=["POST"])
+    def api_demo_snapshot():
+        """Take a snapshot of the current council state before demo."""
+        import shutil
+
+        council_dir = app.config["COUNCIL_DIR"]
+        snapshot_dir = council_dir / "_demo_snapshot"
+
+        # Remove old snapshot
+        if snapshot_dir.is_dir():
+            shutil.rmtree(snapshot_dir, ignore_errors=True)
+        snapshot_dir.mkdir()
+
+        # Snapshot receive_channel
+        rc = council_dir / "receive_channel"
+        if rc.is_dir():
+            shutil.copytree(rc, snapshot_dir / "receive_channel")
+
+        # Snapshot all department folders
+        folder_map = app.config["COUNCIL_CONFIG"].get("folder_map", {})
+        for key, rel_path in folder_map.items():
+            src = council_dir / rel_path
+            if src.is_dir():
+                shutil.copytree(src, snapshot_dir / rel_path)
+
+        # Snapshot processed UIDs
+        uids_path = council_dir / "_processed_uids.json"
+        if uids_path.is_file():
+            shutil.copy2(uids_path, snapshot_dir / "_processed_uids.json")
+
+        logger.info("Demo: snapshot created at %s", snapshot_dir)
+        return jsonify({"success": True, "message": "Snapshot created"})
+
+    @app.route("/api/demo/restore", methods=["POST"])
+    def api_demo_restore():
+        """Restore council state from snapshot — undo demo."""
+        import shutil
+
+        council_dir = app.config["COUNCIL_DIR"]
+        snapshot_dir = council_dir / "_demo_snapshot"
+
+        if not snapshot_dir.is_dir():
+            return jsonify({"success": False, "error": "No snapshot found"}), 404
+
+        # Restore receive_channel
+        rc = council_dir / "receive_channel"
+        if rc.is_dir():
+            shutil.rmtree(rc, ignore_errors=True)
+        snap_rc = snapshot_dir / "receive_channel"
+        if snap_rc.is_dir():
+            shutil.copytree(snap_rc, rc)
+        else:
+            rc.mkdir(parents=True, exist_ok=True)
+
+        # Restore department folders
+        folder_map = app.config["COUNCIL_CONFIG"].get("folder_map", {})
+        for key, rel_path in folder_map.items():
+            dest = council_dir / rel_path
+            if dest.is_dir():
+                shutil.rmtree(dest, ignore_errors=True)
+            snap_src = snapshot_dir / rel_path
+            if snap_src.is_dir():
+                shutil.copytree(snap_src, dest)
+            else:
+                dest.mkdir(parents=True, exist_ok=True)
+
+        # Restore processed UIDs
+        snap_uids = snapshot_dir / "_processed_uids.json"
+        uids_path = council_dir / "_processed_uids.json"
+        if snap_uids.is_file():
+            shutil.copy2(snap_uids, uids_path)
+        elif uids_path.is_file():
+            uids_path.unlink()
+
+        logger.info("Demo: state restored from snapshot")
+        return jsonify({"success": True, "message": "State restored from snapshot"})
+
+    # Shuffled demo queue — cycles through all files without repeats
+    _demo_queue: list[Path] = []
+
+    @app.route("/api/demo/push-one", methods=["POST"])
+    def api_demo_push_one():
+        """Push one shuffled .MSG file from Demo/ to receive_channel."""
+        import random
+        from engine.msg_parser import parse_msg_to_event
+
+        council_dir = app.config["COUNCIL_DIR"]
+        demo_dir = council_dir / "Demo"
+        receive_channel = council_dir / "receive_channel"
+        receive_channel.mkdir(parents=True, exist_ok=True)
+
+        if not demo_dir.is_dir():
+            return jsonify({"success": False, "error": "Demo folder not found"}), 404
+
+        # Refill and shuffle queue when empty
+        if not _demo_queue:
+            msg_files = [f for f in demo_dir.iterdir() if f.is_file() and f.suffix.upper() == ".MSG"]
+            if not msg_files:
+                return jsonify({"success": False, "error": "No .MSG files in Demo folder"}), 404
+            random.shuffle(msg_files)
+            _demo_queue.extend(msg_files)
+
+        chosen = _demo_queue.pop(0)
+        event_dir = parse_msg_to_event(chosen, receive_channel)
+
+        if event_dir:
+            display = extract_event_display(event_dir)
+            return jsonify({
+                "success": True,
+                "event_id": event_dir.name,
+                "subject": display["subject"],
+                "source_file": chosen.name,
+                "remaining": len(_demo_queue),
+            })
+        else:
+            return jsonify({"success": False, "error": f"Failed to parse {chosen.name}"}), 500
+
+    @app.route("/api/demo/status")
+    def api_demo_status():
+        """Check demo state — is snapshot available, how many demo files."""
+        council_dir = app.config["COUNCIL_DIR"]
+        demo_dir = council_dir / "Demo"
+        snapshot_dir = council_dir / "_demo_snapshot"
+
+        msg_count = 0
+        if demo_dir.is_dir():
+            msg_count = len([f for f in demo_dir.iterdir() if f.suffix.upper() == ".MSG"])
+
+        return jsonify({
+            "demo_available": msg_count > 0,
+            "demo_files": msg_count,
+            "snapshot_exists": snapshot_dir.is_dir(),
+        })
+
+    # ── Model Selection Endpoints ───────────────────────────────────────────
+
+    @app.route("/api/models")
+    def api_models():
+        """List available models and the currently active one."""
+        llm_path = CONFIG_DIR / "llm.yaml"
+        with open(llm_path, "r") as f:
+            llm_config = yaml.safe_load(f)
+        return jsonify({
+            "active": llm_config.get("model", ""),
+            "models": llm_config.get("models", []),
+        })
+
+    @app.route("/api/models/switch", methods=["POST"])
+    def api_models_switch():
+        """Switch the active LLM model."""
+        data = request.get_json() or {}
+        model_id = data.get("model_id", "")
+        if not model_id:
+            return jsonify({"error": "model_id required"}), 400
+
+        llm_path = CONFIG_DIR / "llm.yaml"
+        with open(llm_path, "r") as f:
+            llm_config = yaml.safe_load(f)
+
+        # Verify model exists in the list
+        valid_ids = [m["id"] for m in llm_config.get("models", [])]
+        if model_id not in valid_ids:
+            return jsonify({"error": f"Unknown model: {model_id}"}), 400
+
+        llm_config["model"] = model_id
+        with open(llm_path, "w") as f:
+            yaml.dump(llm_config, f, default_flow_style=False, sort_keys=False)
+
+        logger.info("Model switched to: %s", model_id)
+        return jsonify({"success": True, "model": model_id})

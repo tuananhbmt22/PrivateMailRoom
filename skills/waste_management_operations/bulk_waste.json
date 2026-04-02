@@ -1,0 +1,23 @@
+{
+  "sub_item_id": "bulk_waste",
+  "folder_key": "waste_management_operations",
+  "name": "Bulk Waste Pickup",
+  "description": "Request for bulk waste or large item collection",
+  "checks": [
+    "Is the address provided?",
+    "What items need collection?",
+    "Is this a scheduled or on-demand pickup?"
+  ],
+  "outcomes": {
+    "pickup_scheduled": "Bulk waste pickup arranged",
+    "not_eligible": "Items not eligible for bulk waste collection"
+  },
+  "metadata_fields": {
+    "address": "Collection address",
+    "items": "Description of items"
+  },
+  "response_templates": {
+    "pickup_scheduled": "Your bulk waste pickup at {address} has been scheduled.",
+    "not_eligible": "The items described are not eligible for bulk waste collection. Please contact us for alternative disposal options."
+  }
+}

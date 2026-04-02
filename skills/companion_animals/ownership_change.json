@@ -1,0 +1,26 @@
+{
+  "sub_item_id": "ownership_change",
+  "folder_key": "companion_animals",
+  "name": "Ownership Change",
+  "description": "Transfer of pet ownership from one person to another",
+  "checks": [
+    "Is a C3C form provided or referenced?",
+    "Are both previous and new owner details provided?",
+    "Is the microchip number provided?"
+  ],
+  "outcomes": {
+    "transfer_complete": "All required information provided for ownership transfer",
+    "transfer_incomplete": "Missing required details for transfer"
+  },
+  "metadata_fields": {
+    "animal_type": "dog or cat",
+    "animal_name": "Pet's name",
+    "microchip_number": "Microchip number",
+    "form_type": "C3C",
+    "owner_name": "New owner's name"
+  },
+  "response_templates": {
+    "transfer_complete": "Thank you for submitting the Change of Ownership (C3C) form for {animal_name} (microchip: {microchip_number}). The transfer will be processed within 10 business days.",
+    "transfer_incomplete": "Thank you for your ownership transfer request. To process, we require: {missing_items}."
+  }
+}

@@ -33,6 +33,7 @@ _processed_uids.json
 _training_log.jsonl
 _history.json
 _forge_temp/
+_demo_snapshot/
 
 # Kiro (local only)
 .kiro/

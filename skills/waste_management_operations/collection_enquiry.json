@@ -1,0 +1,19 @@
+{
+  "sub_item_id": "collection_enquiry",
+  "folder_key": "waste_management_operations",
+  "name": "Collection Enquiry",
+  "description": "Question about collection schedules or services",
+  "checks": [
+    "What specific information is being requested?",
+    "Is an address provided?"
+  ],
+  "outcomes": {
+    "schedule_info": "Provide collection schedule information"
+  },
+  "metadata_fields": {
+    "address": "Service address"
+  },
+  "response_templates": {
+    "schedule_info": "For collection schedules and service information for {address}, please visit our website or contact our Waste team."
+  }
+}

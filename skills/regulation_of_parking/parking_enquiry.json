@@ -1,0 +1,19 @@
+{
+  "sub_item_id": "parking_enquiry",
+  "folder_key": "regulation_of_parking",
+  "name": "Parking Enquiry",
+  "description": "General question about parking rules, zones, or restrictions",
+  "checks": [
+    "What specific area or zone is being asked about?",
+    "Is this about time restrictions, permit zones, or clearway hours?"
+  ],
+  "outcomes": {
+    "general_info": "Provide relevant parking information"
+  },
+  "metadata_fields": {
+    "location": "Area being asked about"
+  },
+  "response_templates": {
+    "general_info": "Thank you for your enquiry regarding parking in the {location} area. For parking zones, time restrictions, and permit information, please visit our website or contact our office."
+  }
+}

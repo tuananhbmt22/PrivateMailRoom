@@ -1,0 +1,29 @@
+{
+  "sub_item_id": "pet_registration",
+  "folder_key": "companion_animals",
+  "name": "Pet Registration",
+  "description": "New pet registration or registration renewal",
+  "checks": [
+    "Is this a new registration or renewal?",
+    "Is the animal microchipped?",
+    "Is the animal desexed?",
+    "Which form is being submitted (C3A, P1A)?"
+  ],
+  "outcomes": {
+    "new_registration": "New registration with all required information",
+    "renewal": "Registration renewal request",
+    "incomplete_registration": "Missing required information"
+  },
+  "metadata_fields": {
+    "animal_type": "dog or cat",
+    "animal_name": "Pet's name",
+    "microchip_number": "Microchip number",
+    "is_desexed": "Whether desexed (true/false)",
+    "form_type": "C3A or P1A"
+  },
+  "response_templates": {
+    "new_registration": "Thank you for registering your {animal_type} ({animal_name}). Registration will be processed within 10 business days.",
+    "renewal": "Thank you for your registration renewal for {animal_name}. It will be processed within 5 business days.",
+    "incomplete_registration": "To complete registration, we require: {missing_items}."
+  }
+}

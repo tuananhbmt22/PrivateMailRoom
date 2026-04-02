@@ -1,0 +1,26 @@
+{
+  "sub_item_id": "bin_request",
+  "folder_key": "waste_management_operations",
+  "name": "Bin Request/Replacement",
+  "description": "Request for new, replacement, or repaired bin",
+  "checks": [
+    "Is the address provided?",
+    "What is the issue (damaged, stolen, new service)?",
+    "Which bin type is needed?"
+  ],
+  "outcomes": {
+    "bin_replacement": "Bin needs replacement",
+    "new_service": "New waste service setup",
+    "bin_repair": "Bin needs repair"
+  },
+  "metadata_fields": {
+    "address": "Service address",
+    "bin_type": "general, recycling, or green waste",
+    "issue": "damaged, stolen, missing, new"
+  },
+  "response_templates": {
+    "bin_replacement": "A replacement bin will be delivered to {address} within 5 business days.",
+    "new_service": "Your new waste service at {address} will be set up within 10 business days.",
+    "bin_repair": "A bin repair has been scheduled for {address}."
+  }
+}

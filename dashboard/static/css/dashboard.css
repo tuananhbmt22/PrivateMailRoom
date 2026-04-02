@@ -555,10 +555,9 @@ body {
 .modal-body {
     padding: 20px;
     overflow-y: auto;
+    flex: 1;
     font-size: 12px;
-    font-family: 'SF Mono', 'Fira Code', monospace;
     color: var(--text);
-    white-space: pre-wrap;
     line-height: 1.6;
 }
 

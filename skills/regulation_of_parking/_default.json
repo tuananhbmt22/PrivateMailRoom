@@ -1,0 +1,20 @@
+{
+  "sub_item_id": "_default",
+  "folder_key": "regulation_of_parking",
+  "name": "Parking — General",
+  "description": "Default skill for parking events that don't match a specific sub-item",
+  "checks": [
+    "What is the sender's request about?",
+    "Is there a fine or infringement number?",
+    "Is there a location mentioned?"
+  ],
+  "outcomes": {
+    "general_parking": "General parking matter, route to appropriate officer"
+  },
+  "metadata_fields": {
+    "request_summary": "Brief summary of the request"
+  },
+  "response_templates": {
+    "general_parking": "Thank you for your correspondence regarding parking. Your enquiry has been received and will be reviewed by our Parking team."
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "sub_item_id": "wandering_animal",
+  "folder_key": "companion_animals",
+  "name": "Wandering/Lost Animal",
+  "description": "Report of a stray, wandering, or lost animal",
+  "checks": [
+    "Is this the reporter's own lost pet or someone else's animal?",
+    "Is a location provided?",
+    "Is the animal aggressive or in danger?"
+  ],
+  "outcomes": {
+    "ranger_dispatch": "Wandering animal reported with location",
+    "lost_pet_report": "Owner reporting their own lost pet",
+    "urgent_safety": "Animal is aggressive or in immediate danger"
+  },
+  "metadata_fields": {
+    "animal_type": "dog or cat",
+    "location": "Where the animal was seen",
+    "is_aggressive": "Whether the animal is aggressive (true/false)"
+  },
+  "response_templates": {
+    "ranger_dispatch": "Thank you for reporting the wandering {animal_type} at {location}. A Ranger will attend.",
+    "lost_pet_report": "Thank you for reporting your lost {animal_type}. Check the NSW Pet Registry and local lost pet groups.",
+    "urgent_safety": "This has been flagged as priority. A Ranger will attend ASAP. If immediate danger, contact NSW Police on 131 444."
+  }
+}

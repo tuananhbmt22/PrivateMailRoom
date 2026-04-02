@@ -53,8 +53,13 @@ class ClassificationOutcome:
     event_id: str
     file_count: int
     outcome: str
+    sub_item_id: str | None
+    sub_item_name: str | None
     confidence: float
+    sub_item_confidence: float
     reasoning: str
+    display_title: str
+    display_title_redacted: str
     linked_files: list[str]
     raw_response: str
     llm_latency_ms: float
@@ -176,8 +181,13 @@ def parse_llm_response(raw_content: str, event: Event) -> ClassificationOutcome:
             event_id=event.event_id,
             file_count=event.file_count,
             outcome="Undetermined",
+            sub_item_id=None,
+            sub_item_name=None,
             confidence=0.0,
+            sub_item_confidence=0.0,
             reasoning=f"LLM response was not valid JSON: {exc}",
+            display_title="",
+            display_title_redacted="",
             linked_files=event.filenames,
             raw_response=raw_content,
             llm_latency_ms=0.0,
@@ -190,8 +200,13 @@ def parse_llm_response(raw_content: str, event: Event) -> ClassificationOutcome:
         event_id=parsed.get("event_id", event.event_id),
         file_count=parsed.get("file_count", event.file_count),
         outcome=parsed.get("outcome", "Undetermined"),
+        sub_item_id=parsed.get("sub_item_id"),
+        sub_item_name=parsed.get("sub_item_name"),
         confidence=float(parsed.get("confidence", 0.0)),
+        sub_item_confidence=float(parsed.get("sub_item_confidence", 0.0)),
         reasoning=parsed.get("reasoning", "No reasoning provided"),
+        display_title=parsed.get("display_title", ""),
+        display_title_redacted=parsed.get("display_title_redacted", ""),
         linked_files=parsed.get("linked_files", event.filenames),
         raw_response=raw_content,
         llm_latency_ms=0.0,
@@ -258,8 +273,13 @@ class ClassificationEngine:
                 event_id=event.event_id,
                 file_count=event.file_count,
                 outcome="Undetermined",
+                sub_item_id=None,
+                sub_item_name=None,
                 confidence=0.0,
+                sub_item_confidence=0.0,
                 reasoning=f"Inference failure: {llm_response.error}",
+                display_title="",
+                display_title_redacted="",
                 linked_files=event.filenames,
                 raw_response=llm_response.content,
                 llm_latency_ms=llm_response.latency_ms,
@@ -330,8 +350,13 @@ class ClassificationEngine:
                 event_id=event.event_id,
                 file_count=0,
                 outcome="Undetermined",
+                sub_item_id=None,
+                sub_item_name=None,
                 confidence=0.0,
+                sub_item_confidence=0.0,
                 reasoning="Event contains no readable files",
+                display_title="",
+                display_title_redacted="",
                 linked_files=[],
                 raw_response="",
                 llm_latency_ms=0.0,

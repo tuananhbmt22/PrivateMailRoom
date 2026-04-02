@@ -1,0 +1,22 @@
+{
+  "sub_item_id": "desexing_notification",
+  "folder_key": "companion_animals",
+  "name": "Desexing Notification",
+  "description": "Notification that an animal has been desexed",
+  "checks": [
+    "Is a desexing certificate provided?",
+    "Is the microchip number provided?"
+  ],
+  "outcomes": {
+    "update_record": "Valid desexing notification",
+    "needs_verification": "Missing certificate or microchip"
+  },
+  "metadata_fields": {
+    "animal_name": "Pet's name",
+    "microchip_number": "Microchip number"
+  },
+  "response_templates": {
+    "update_record": "Thank you for notifying us of the desexing of {animal_name}. Your record will be updated within 5 business days.",
+    "needs_verification": "To update our records, we require: {missing_items}."
+  }
+}

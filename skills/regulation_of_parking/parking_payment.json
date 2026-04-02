@@ -1,0 +1,22 @@
+{
+  "sub_item_id": "parking_payment",
+  "folder_key": "regulation_of_parking",
+  "name": "Parking Fine Payment",
+  "description": "Sender wants to pay a fine or asks about payment options",
+  "checks": [
+    "Is a fine number referenced?",
+    "Is the sender asking about payment plans or hardship?"
+  ],
+  "outcomes": {
+    "payment_info": "Provide standard payment instructions",
+    "hardship": "Sender mentions financial difficulty, provide payment plan info"
+  },
+  "metadata_fields": {
+    "fine_number": "Infringement notice number",
+    "is_hardship": "Whether financial hardship is mentioned (true/false)"
+  },
+  "response_templates": {
+    "payment_info": "Thank you for your enquiry regarding infringement notice {fine_number}. Payment can be made online, by phone, or in person. The deadline is 28 days from issue.",
+    "hardship": "Thank you for your enquiry regarding infringement notice {fine_number}. Payment plans are available — please contact our office to discuss options."
+  }
+}

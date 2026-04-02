@@ -1,0 +1,26 @@
+{
+  "sub_item_id": "illegal_parking_report",
+  "folder_key": "regulation_of_parking",
+  "name": "Illegal Parking Report",
+  "description": "Sender is reporting illegal parking by someone else",
+  "checks": [
+    "Is a specific location provided?",
+    "Is the issue ongoing or a one-time incident?",
+    "Is there a safety concern (blocking driveway, school zone)?"
+  ],
+  "outcomes": {
+    "ranger_dispatch": "Clear location provided, ranger can investigate",
+    "safety_urgent": "Safety concern identified, priority dispatch",
+    "noted": "Report logged but insufficient detail for immediate action"
+  },
+  "metadata_fields": {
+    "location": "Street address or intersection",
+    "is_ongoing": "Whether the issue is ongoing (true/false)",
+    "safety_concern": "Whether there is a safety concern (true/false)"
+  },
+  "response_templates": {
+    "ranger_dispatch": "Thank you for reporting the parking issue at {location}. A Council Ranger will attend to investigate.",
+    "safety_urgent": "Thank you for reporting the urgent parking safety concern at {location}. This has been flagged as priority. If immediate danger, also contact NSW Police on 131 444.",
+    "noted": "Thank you for your parking report. It has been logged. If you can provide additional details, it will help our Rangers investigate."
+  }
+}

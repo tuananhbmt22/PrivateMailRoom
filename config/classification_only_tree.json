@@ -1,8 +1,8 @@
 {
-  "version": "1.0.0",
+  "version": "2.0.0",
   "council": "Example Council",
-  "purpose": "Classification only \u2014 determines which folder a document belongs to. No action routing.",
-  "confidence_threshold": 0.7,
+  "purpose": "Classification with sub-item identification. Routes emails to folders and identifies the event type within each folder.",
+  "confidence_threshold": 0.70,
   "fallback": "Undetermined",
   "evaluation_priority": [
     "junk",
@@ -30,440 +30,560 @@
       "name": "Rates General Matters",
       "description": "Rates refunds, adjustments, extensions, overpayments, authority to act, deceased estates, reissue requests, paperless/email delivery",
       "triggers": [
-        "rates enquiry",
-        "rates adjustment",
-        "overpaid",
-        "rates outstanding",
-        "estate of the late",
-        "reissue rates",
-        "rates refund",
-        "refund request",
-        "authority to act",
-        "paperless",
-        "email rates"
+        "rates enquiry", "rates adjustment", "overpaid", "rates outstanding",
+        "estate of the late", "reissue rates", "rates refund", "refund request",
+        "authority to act", "paperless", "email rates"
       ],
       "exclusions": [
-        "No mention of rates, billing terms, or property ownership \u2014 even if about a property"
-      ]
+        "If no mention of rates, billing terms, or property ownership → Undetermined"
+      ],
+      "status": "active",
+      "allow_others": true,
+      "sub_items": {
+        "rates_refund": {
+          "name": "Rates Refund Request",
+          "triggers": ["refund", "overpaid", "overpayment", "credit"]
+        },
+        "rates_adjustment": {
+          "name": "Rates Adjustment",
+          "triggers": ["adjustment", "reassessment", "incorrect rates", "rates review"]
+        },
+        "rates_extension": {
+          "name": "Payment Extension",
+          "triggers": ["extension", "hardship", "payment plan", "defer"]
+        },
+        "rates_reissue": {
+          "name": "Reissue Request",
+          "triggers": ["reissue", "duplicate", "lost notice", "copy of rates"]
+        },
+        "rates_authority": {
+          "name": "Authority to Act",
+          "triggers": ["authority to act", "agent", "representative", "solicitor"]
+        },
+        "rates_deceased": {
+          "name": "Deceased Estate",
+          "triggers": ["deceased", "estate of the late", "probate", "executor"]
+        }
+      }
     },
     "regulated_premises": {
       "name": "Regulated Premises",
       "description": "Food business registration, food trucks, mobile vendors, home-based food, beauty salons, skin clinics, tattooing, waxing, skin penetration, health inspections, compliance",
       "triggers": [
-        "food business notification",
-        "inspection",
-        "permits",
-        "business registration",
-        "temporary food business notification",
-        "business enquiry",
-        "skin penetration",
-        "skin clinic",
-        "beauty",
-        "approval to operate",
-        "food complaint",
-        "cleanliness",
-        "food safety",
-        "food labelling"
+        "food business notification", "inspection", "permits", "business registration",
+        "temporary food business notification", "business enquiry", "skin penetration",
+        "skin clinic", "beauty", "approval to operate", "food complaint",
+        "cleanliness", "food safety", "food labelling"
       ],
       "exclusions": [
-        "Payment confirmations, fees, or financial statements only \u2192 Finance folders",
-        "Waste logistics (collection, bins, delivery, pickup) \u2192 Waste Management",
-        "Unsanitary waste from neighbouring properties (pests, hygiene) routes HERE not Waste"
-      ]
+        "If payment confirmations, fees, or financial statements only → Finance folders",
+        "If waste logistics (collection, bins, delivery, pickup) → Waste Management"
+      ],
+      "status": "active",
+      "allow_others": true,
+      "sub_items": {
+        "food_business_registration": {
+          "name": "Food Business Registration",
+          "triggers": ["food business notification", "register food business", "food premises"]
+        },
+        "health_inspection": {
+          "name": "Health Inspection",
+          "triggers": ["inspection", "health inspection", "compliance check", "food safety audit"]
+        },
+        "skin_penetration": {
+          "name": "Skin Penetration Registration",
+          "triggers": ["skin penetration", "tattoo", "beauty salon", "skin clinic", "waxing"]
+        },
+        "food_complaint": {
+          "name": "Food Complaint",
+          "triggers": ["food complaint", "food poisoning", "unclean", "hygiene concern"]
+        }
+      }
     },
     "onsite_sewage_management": {
       "name": "Onsite Sewage Management Septic Service Reports",
-      "description": "Septic system servicing, inspection, OSSM reports, quarterly maintenance, garden master work, residential sewage treatment compliance",
+      "description": "Septic system servicing, inspection, OSSM reports, quarterly maintenance",
       "triggers": [
-        "septic service report",
-        "septic inspection request",
-        "new septic service provider",
-        "OSSM",
-        "onsite sewage",
-        "garden master"
+        "septic service report", "septic inspection request", "new septic service provider",
+        "OSSM", "onsite sewage", "garden master"
       ],
       "exclusions": [
-        "If 'septic' appears with invoice/payment/fee/reminder terms \u2192 Financial Management Debtors"
-      ]
+        "If 'septic' appears with invoice/payment/fee/reminder terms → Financial Management Debtors"
+      ],
+      "status": "active",
+      "allow_others": true,
+      "sub_items": {
+        "septic_service_report": {
+          "name": "Septic Service Report",
+          "triggers": ["service report", "quarterly report", "maintenance report"]
+        },
+        "septic_inspection": {
+          "name": "Septic Inspection Request",
+          "triggers": ["inspection request", "new inspection", "compliance inspection"]
+        },
+        "septic_provider_change": {
+          "name": "Service Provider Change",
+          "triggers": ["new provider", "change provider", "service provider"]
+        }
+      }
     },
     "waste_management_operations": {
       "name": "Waste Management Operations Collection Services",
-      "description": "Bin requests (new, missing, stolen, damaged, repair), waste collection issues, bulk waste, mattress pickup, extra bins",
+      "description": "Bin requests, waste collection issues, bulk waste, mattress pickup, extra bins",
       "triggers": [
-        "missed bin",
-        "not emptied",
-        "not collected",
-        "bin repair",
-        "damaged bin",
-        "broken bin",
-        "stolen bin",
-        "collection enquiry",
-        "garbage enquiry",
-        "additional service",
-        "new waste service",
-        "bulk waste",
-        "mattress pickup"
+        "missed bin", "not emptied", "not collected", "bin repair", "damaged bin",
+        "broken bin", "stolen bin", "collection enquiry", "garbage enquiry",
+        "additional service", "new waste service", "bulk waste", "mattress pickup"
       ],
       "exclusions": [
-        "If 'blue disc' is mentioned \u2192 Undetermined",
-        "Issue about another person's waste or public dumping with no sender collection request \u2192 exclude",
-        "Abandoned waste in public with no sender request \u2192 Environmental Compliance Illegal Dumping",
-        "Unsanitary waste from neighbours (pests/hygiene) \u2192 Regulated Premises",
-        "Waste + payment/costs only \u2192 exclude from here"
-      ]
+        "If 'blue disc' is mentioned → Undetermined",
+        "If abandoned waste in public → Environmental Compliance Illegal Dumping"
+      ],
+      "status": "active",
+      "allow_others": true,
+      "sub_items": {
+        "missed_collection": {
+          "name": "Missed Collection",
+          "triggers": ["missed bin", "not emptied", "not collected", "skipped"]
+        },
+        "bin_request": {
+          "name": "Bin Request/Replacement",
+          "triggers": ["new bin", "replace bin", "damaged bin", "broken bin", "stolen bin", "bin repair"]
+        },
+        "bulk_waste": {
+          "name": "Bulk Waste Pickup",
+          "triggers": ["bulk waste", "mattress", "large item", "cleanup"]
+        },
+        "collection_enquiry": {
+          "name": "Collection Enquiry",
+          "triggers": ["collection schedule", "pickup day", "when is collection"]
+        }
+      }
     },
     "regulation_of_parking": {
       "name": "Regulation of Parking",
-      "description": "Parking fines, illegal/improper parking, infringement notices, vehicles blocking driveways/school zones/roads, ranger enforcement, truck parking",
+      "description": "Parking fines, illegal/improper parking, infringement notices, vehicles blocking driveways/school zones/roads, ranger enforcement",
       "triggers": [
-        "parking",
-        "parked",
-        "park",
-        "illegal parking",
-        "truck parking",
-        "fine",
-        "infringement",
-        "ranger",
-        "clearway",
-        "no stopping"
+        "parking", "parked", "park", "illegal parking", "truck parking", "fine",
+        "infringement", "ranger", "clearway", "no stopping"
       ],
-      "exclusions": []
+      "exclusions": [],
+      "status": "active",
+      "allow_others": true,
+      "sub_items": {
+        "parking_appeal": {
+          "name": "Parking Fine Appeal",
+          "triggers": ["appeal", "dispute", "contest", "unfair", "review fine"]
+        },
+        "parking_payment": {
+          "name": "Parking Fine Payment",
+          "triggers": ["pay fine", "payment", "how much", "payment plan", "hardship"]
+        },
+        "illegal_parking_report": {
+          "name": "Illegal Parking Report",
+          "triggers": ["report", "illegal parking", "blocking driveway", "school zone", "safety"]
+        },
+        "parking_permit": {
+          "name": "Parking Permit",
+          "triggers": ["permit", "residential permit", "renewal", "apply permit"]
+        },
+        "parking_enquiry": {
+          "name": "Parking Enquiry",
+          "triggers": ["parking rules", "time limit", "zone", "restrictions"]
+        }
+      }
     },
     "financial_management_debtors": {
       "name": "Financial Management Debtors",
-      "description": "Unpaid invoices, overdue accounts, account receivables, billing follow-ups, invoice requests/amendments, balance inquiries",
+      "description": "Unpaid invoices, overdue accounts, billing follow-ups, invoice requests/amendments",
       "triggers": [
-        "unpaid invoice",
-        "invoice request",
-        "overdue account",
-        "statement",
-        "balance due",
-        "request invoice",
-        "amend invoice",
-        "reissue",
-        "clarify",
-        "enquiry"
+        "unpaid invoice", "invoice request", "overdue account", "statement",
+        "balance due", "request invoice", "amend invoice", "reissue", "clarify", "enquiry"
       ],
       "exclusions": [
-        "If 'remittance' is mentioned \u2192 exclude",
-        "If real estate/property manager + amount received by council \u2192 Remittance Statements (unless requesting new invoice or overdue language)",
-        "Must contain clear reference to financial debt or receivable"
-      ]
+        "If 'remittance' is mentioned → Remittance Statements",
+        "If real estate/property manager + amount received → Remittance Statements"
+      ],
+      "status": "active",
+      "allow_others": true,
+      "sub_items": {
+        "invoice_request": {
+          "name": "Invoice Request",
+          "triggers": ["request invoice", "new invoice", "invoice for"]
+        },
+        "overdue_followup": {
+          "name": "Overdue Account Follow-up",
+          "triggers": ["overdue", "unpaid", "outstanding balance", "reminder"]
+        },
+        "invoice_amendment": {
+          "name": "Invoice Amendment",
+          "triggers": ["amend invoice", "incorrect invoice", "invoice error", "correction"]
+        }
+      }
     },
     "companion_animals": {
       "name": "Companion Animals",
-      "description": "Pet registration, microchipping, desexing, lifetime registration, wandering/stray/barking/lost pets, rehoming, cat and dog licensing",
+      "description": "Pet registration, microchipping, desexing, barking complaints, wandering animals, ownership changes",
       "triggers": [
-        "dog",
-        "cat",
-        "pet",
-        "animal",
-        "microchipping",
-        "desexing",
-        "lifetime registration",
-        "animal forms",
-        "P1A",
-        "C3A",
-        "C3C",
-        "wandering pets",
-        "barking dog",
-        "stray",
-        "rehoming",
-        "lost pets",
-        "change of owner",
-        "change of ownership",
-        "permanent identification",
-        "sterilisation",
-        "animal registration",
-        "registration form"
+        "dog", "cat", "pet", "animal", "microchipping", "desexing",
+        "lifetime registration", "animal forms", "P1A", "C3A", "C3C",
+        "wandering pets", "barking dog", "stray", "rehoming", "lost pets",
+        "change of owner", "change of ownership"
       ],
       "exclusions": [
-        "Dog attack or public danger event \u2192 exclude",
-        "Violence or aggression \u2192 exclude"
-      ]
+        "If dog attack or public danger event → Undetermined"
+      ],
+      "status": "active",
+      "allow_others": true,
+      "sub_items": {
+        "pet_registration": {
+          "name": "Pet Registration",
+          "triggers": ["registration", "register", "C3A", "P1A", "new registration", "renewal"]
+        },
+        "ownership_change": {
+          "name": "Ownership Change",
+          "triggers": ["change of owner", "C3C", "transfer", "new owner"]
+        },
+        "barking_complaint": {
+          "name": "Barking Complaint",
+          "triggers": ["barking", "noisy dog", "noise complaint", "barking dog"]
+        },
+        "wandering_animal": {
+          "name": "Wandering/Lost Animal",
+          "triggers": ["wandering", "stray", "lost", "found animal", "missing pet"]
+        },
+        "desexing_notification": {
+          "name": "Desexing Notification",
+          "triggers": ["desexing", "desexed", "sterilisation", "vet certificate"]
+        }
+      }
     },
     "building_control_property_enquiries": {
       "name": "Building Control Property Enquiries",
-      "description": "Development applications, planning enquiries, fences, sheds, carports, pools, retaining walls, dwellings, subdivision, zoning, land use, Build Over Asset approvals",
+      "description": "Development applications, planning enquiries, fences, sheds, pools, subdivision, zoning",
       "triggers": [
-        "inquiry",
-        "enquiry",
-        "development application",
-        "DA",
-        "zoning",
-        "subdivision",
-        "boundary adjustment",
-        "dual occupancy",
-        "change of use",
-        "dwelling",
-        "shed",
-        "garage",
-        "carport",
-        "retaining wall",
-        "pool",
-        "granny flat",
-        "secondary dwelling",
-        "build over asset",
-        "fee quote"
+        "inquiry", "enquiry", "development application", "DA", "zoning",
+        "subdivision", "boundary adjustment", "dual occupancy", "change of use",
+        "dwelling", "shed", "garage", "carport", "retaining wall", "pool",
+        "granny flat", "build over asset", "fee quote"
       ],
       "exclusions": [
-        "Regulated business activity \u2192 Regulated Premises",
-        "Roads or public infrastructure \u2192 Roads folders"
-      ]
+        "If regulated business activity → Regulated Premises"
+      ],
+      "status": "active",
+      "allow_others": true,
+      "sub_items": {
+        "da_enquiry": {
+          "name": "Development Application Enquiry",
+          "triggers": ["DA", "development application", "planning enquiry", "pre-lodgement"]
+        },
+        "zoning_enquiry": {
+          "name": "Zoning Enquiry",
+          "triggers": ["zoning", "land use", "permitted use", "zone certificate"]
+        },
+        "minor_works": {
+          "name": "Minor Works Enquiry",
+          "triggers": ["shed", "fence", "carport", "pool", "retaining wall", "granny flat"]
+        },
+        "subdivision": {
+          "name": "Subdivision Enquiry",
+          "triggers": ["subdivision", "boundary adjustment", "lot consolidation"]
+        }
+      }
     },
     "fire_safety_services": {
       "name": "Fire Safety Services",
-      "description": "Annual Fire Safety Statements (AFS/AFSS), fire inspections, fire-related demolition, fire compliance documents, certifications, fire protection systems",
+      "description": "Annual Fire Safety Statements, fire inspections, fire compliance documents",
       "triggers": [
-        "AFS",
-        "AFSS",
-        "fire",
-        "fire safety statement",
-        "fire inspection",
-        "fire compliance",
-        "fire protection",
-        "fire hazard",
-        "fire risk",
-        "annual fire safety"
+        "AFS", "AFSS", "fire", "fire safety statement", "fire inspection",
+        "fire compliance", "fire protection", "annual fire safety"
       ],
       "exclusions": [
-        "If 'fire' is not connected to safety, inspection, demolition, or AFSS \u2192 exclude"
-      ]
+        "If 'fire' is not connected to safety, inspection, or AFSS → Undetermined"
+      ],
+      "status": "active",
+      "allow_others": true,
+      "sub_items": {
+        "afss_submission": {
+          "name": "AFSS Submission",
+          "triggers": ["AFSS", "annual fire safety statement", "fire safety statement"]
+        },
+        "fire_inspection": {
+          "name": "Fire Inspection Request",
+          "triggers": ["fire inspection", "fire compliance", "fire audit"]
+        },
+        "fire_certification": {
+          "name": "Fire Certification",
+          "triggers": ["fire certificate", "fire protection", "fire system certification"]
+        }
+      }
     },
     "roads_development_services": {
       "name": "Roads Development Services and Roads Act Applications",
-      "description": "Section 138 approvals, driveway works, road access applications, RA references (RA-YYYY-XXXX), road restoration plans, S138 inspections",
+      "description": "Section 138 approvals, driveway works, road access applications",
       "triggers": [
-        "RA-",
-        "S138",
-        "Section 138",
-        "driveway access application",
-        "driveway approval",
-        "driveway inspection",
-        "driveway additional information",
-        "driveway enquiry",
-        "Roads Act"
+        "RA-", "S138", "Section 138", "driveway access application",
+        "driveway approval", "driveway inspection", "Roads Act"
       ],
       "exclusions": [
-        "Customer request to repair existing road conditions (potholes, erosion, gutter) \u2192 Roads Maintenance",
-        "Phrases like 'fix the problem', 'washed away with rain', 'surface deteriorated' \u2192 Roads Maintenance"
-      ]
+        "If customer request to repair existing road → Roads Maintenance"
+      ],
+      "status": "active",
+      "allow_others": true,
+      "sub_items": {
+        "s138_application": {
+          "name": "Section 138 Application",
+          "triggers": ["S138", "Section 138", "Roads Act application"]
+        },
+        "driveway_application": {
+          "name": "Driveway Access Application",
+          "triggers": ["driveway access", "driveway approval", "new driveway"]
+        },
+        "driveway_inspection": {
+          "name": "Driveway Inspection",
+          "triggers": ["driveway inspection", "inspection request"]
+        }
+      }
     },
     "roads_maintenance": {
       "name": "Roads Maintenance Correspondence Incoming",
-      "description": "Potholes, gravel, grading, footpath damage, unsealed road damage, general road upkeep, road sealing/widening/clearing requests",
+      "description": "Potholes, gravel, grading, footpath damage, road upkeep",
       "triggers": [
-        "maintenance road",
-        "maintenance street",
-        "pothole",
-        "gravel",
-        "grading",
-        "footpath maintenance",
-        "unsealed road",
-        "road repairs",
-        "road damage",
-        "road sealing",
-        "road widening",
-        "overgrowth"
+        "maintenance road", "pothole", "gravel", "grading",
+        "footpath maintenance", "unsealed road", "road repairs", "road damage",
+        "road sealing", "road widening", "overgrowth"
       ],
       "exclusions": [
-        "If Section 138 or driveway application \u2192 Roads Development Services"
-      ]
+        "If Section 138 or driveway application → Roads Development Services"
+      ],
+      "status": "active",
+      "allow_others": true,
+      "sub_items": {
+        "pothole_report": {
+          "name": "Pothole Report",
+          "triggers": ["pothole", "road damage", "surface damage"]
+        },
+        "grading_request": {
+          "name": "Grading Request",
+          "triggers": ["grading", "gravel road", "unsealed road", "road condition"]
+        },
+        "footpath_repair": {
+          "name": "Footpath Repair",
+          "triggers": ["footpath", "footpath damage", "trip hazard", "cracked footpath"]
+        },
+        "vegetation_clearing": {
+          "name": "Vegetation/Overgrowth",
+          "triggers": ["overgrowth", "vegetation", "tree branch", "road clearing"]
+        }
+      }
     },
     "rates_name_address_change": {
       "name": "Rates Name/Address Change or Ownership Update Requests",
-      "description": "Mailing address changes, property ownership updates, agent-managed updates, postal corrections, name adjustments, email changes linked to rates accounts",
+      "description": "Mailing address changes, property ownership updates, postal corrections",
       "triggers": [
-        "change of address",
-        "change of name",
-        "managing agent",
-        "update address",
-        "update email",
-        "change postal address",
-        "change physical address",
-        "ownership update",
-        "NAR"
+        "change of address", "change of name", "managing agent",
+        "update address", "update email", "change postal address",
+        "ownership update", "NAR"
       ],
       "exclusions": [
-        "Water flow, stormwater runoff, drainage problems \u2192 Sewerage Drainage",
-        "Requests for email/paperless rate notices \u2192 Rates General Matters"
-      ]
+        "If water flow or drainage problems → Sewerage Drainage",
+        "If requests for email/paperless rate notices → Rates General Matters"
+      ],
+      "status": "active",
+      "allow_others": true,
+      "sub_items": {
+        "address_change": {
+          "name": "Address Change",
+          "triggers": ["change of address", "update address", "new address", "postal address"]
+        },
+        "name_change": {
+          "name": "Name Change",
+          "triggers": ["change of name", "name update", "ownership transfer"]
+        },
+        "agent_update": {
+          "name": "Managing Agent Update",
+          "triggers": ["managing agent", "agent update", "property manager"]
+        }
+      }
     },
     "nhvr_applications_request": {
       "name": "National Heavy Vehicle Regulator Applications Request",
-      "description": "NHVR consent requests, applications, case IDs awaiting response, council action/input/approval for vehicle permits",
+      "description": "NHVR consent requests, applications, case IDs awaiting response",
       "triggers": [
-        "NHVR",
-        "NHVR Portal \u2013 Consent Request",
-        "consent requested",
-        "heavy vehicle",
-        "National Heavy Vehicle"
+        "NHVR", "NHVR Portal – Consent Request", "consent requested",
+        "heavy vehicle", "National Heavy Vehicle"
       ],
       "exclusions": [
-        "If message confirms permit issuance or final approval \u2192 NHVR Permit Issued"
-      ]
+        "If message confirms permit issuance → NHVR Permit Issued"
+      ],
+      "status": "active",
+      "allow_others": false,
+      "sub_items": {
+        "nhvr_consent_request": {
+          "name": "NHVR Consent Request",
+          "triggers": ["consent request", "consent requested", "awaiting consent"]
+        },
+        "nhvr_application": {
+          "name": "NHVR Application",
+          "triggers": ["application", "new application", "heavy vehicle application"]
+        }
+      }
     },
     "nhvr_permit_issued": {
       "name": "National Heavy Vehicle Regulator Application Permit Issued",
-      "description": "NHVR permit confirmations, approved submissions, regulatory/logistics updates for heavy vehicle movement approvals",
+      "description": "NHVR permit confirmations, approved submissions",
       "triggers": [
-        "NHVR Portal \u2013 Permit Issued",
-        "permit issued",
-        "permit granted"
+        "NHVR Portal – Permit Issued", "permit issued", "permit granted"
       ],
       "exclusions": [
-        "If both 'Consent Request' and 'Permit' appear \u2192 NHVR Applications Request"
-      ]
+        "If both 'Consent Request' and 'Permit' appear → NHVR Applications Request"
+      ],
+      "status": "active",
+      "allow_others": false,
+      "sub_items": {
+        "permit_issued": {
+          "name": "Permit Issued Notification",
+          "triggers": ["permit issued", "permit granted", "approved"]
+        }
+      }
     },
     "remittance_statements": {
       "name": "Remittance Statements",
-      "description": "Payment confirmations from real estate agents, property managers, strata groups confirming income/payment received by Council",
+      "description": "Payment confirmations from real estate agents, property managers, strata groups",
       "triggers": [
-        "were paid",
-        "payment has been made",
-        "funds will appear",
-        "confirm payment",
-        "statement attached",
-        "financial statement",
-        "statement number",
+        "were paid", "payment has been made", "funds will appear",
+        "confirm payment", "statement attached", "financial statement",
         "property management"
       ],
       "exclusions": [
         "Must come from real estate, property, or strata entity",
-        "If requesting new invoice or overdue language \u2192 Financial Management Debtors"
-      ]
+        "If requesting new invoice or overdue language → Financial Management Debtors"
+      ],
+      "status": "active",
+      "allow_others": true,
+      "sub_items": {
+        "payment_confirmation": {
+          "name": "Payment Confirmation",
+          "triggers": ["payment made", "funds transferred", "confirm payment"]
+        },
+        "statement_submission": {
+          "name": "Statement Submission",
+          "triggers": ["statement attached", "financial statement", "remittance statement"]
+        }
+      }
     },
     "finance_remittance_advices": {
       "name": "Finance Remittance Advices",
-      "description": "Vendor/supplier/third-party payment confirmations to Council \u2014 NOT property or rates related",
+      "description": "Vendor/supplier payment confirmations to Council",
       "triggers": [
-        "remittance advice",
-        "EFT payment",
-        "EFT remittance",
-        "payment advice",
-        "vendor payment",
-        "payment date",
-        "settlement advice",
-        "vendor ID"
+        "remittance advice", "EFT payment", "EFT remittance",
+        "payment advice", "vendor payment", "settlement advice"
       ],
       "exclusions": [
-        "If 'rates' appears anywhere \u2192 Remittance Statements",
-        "If from real estate or strata managers \u2192 Remittance Statements",
-        "Must NOT confirm rental or property-related income"
-      ]
+        "If 'rates' appears → Remittance Statements",
+        "If from real estate or strata managers → Remittance Statements"
+      ],
+      "status": "active",
+      "allow_others": false,
+      "sub_items": {
+        "eft_remittance": {
+          "name": "EFT Remittance Advice",
+          "triggers": ["EFT", "electronic funds transfer", "remittance advice"]
+        },
+        "vendor_payment": {
+          "name": "Vendor Payment Advice",
+          "triggers": ["vendor payment", "supplier payment", "payment advice"]
+        }
+      }
     },
     "environmental_compliance_illegal_dumping": {
       "name": "Environmental Compliance Illegal Dumping",
-      "description": "Dumped rubbish, abandoned waste, unauthorized disposal, RID/RIDOnline incidents, public complaints about illegal dumping",
+      "description": "Dumped rubbish, abandoned waste, unauthorized disposal, RID incidents",
       "triggers": [
-        "RID",
-        "RIDOnline",
-        "illegal dumping",
-        "dumped rubbish",
-        "abandoned waste",
-        "unauthorized disposal"
+        "RID", "RIDOnline", "illegal dumping", "dumped rubbish",
+        "abandoned waste", "unauthorized disposal"
       ],
       "exclusions": [
-        "Routine collection failure \u2192 Waste Management Operations"
-      ]
+        "If routine collection failure → Waste Management Operations"
+      ],
+      "status": "active",
+      "allow_others": true,
+      "sub_items": {
+        "illegal_dumping_report": {
+          "name": "Illegal Dumping Report",
+          "triggers": ["illegal dumping", "dumped rubbish", "abandoned waste"]
+        },
+        "rid_incident": {
+          "name": "RID Online Incident",
+          "triggers": ["RID", "RIDOnline", "RID report"]
+        }
+      }
     },
     "sewerage_drainage": {
       "name": "Sewerage Drainage Customer Request Management Correspondence",
-      "description": "Stormwater, sewerage, water runoff, culverts, flooding, drainage issues, creek blockages, gutter/kerb drainage, pipe issues",
+      "description": "Stormwater, sewerage, water runoff, culverts, flooding, drainage issues",
       "triggers": [
-        "stormwater",
-        "sewerage",
-        "water runoff",
-        "culvert",
-        "flooding",
-        "drainage",
-        "creek",
-        "blocked outlet",
-        "kerb drainage",
-        "sewer overflow",
-        "discharge outlet",
-        "rainwater flooding"
+        "stormwater", "sewerage", "water runoff", "culvert", "flooding",
+        "drainage", "creek", "blocked outlet", "sewer overflow"
       ],
       "exclusions": [
-        "If core intent is financial (confirming/requesting invoices) \u2192 Remittance Statements or Financial Management Debtors"
-      ]
+        "If core intent is financial → Remittance Statements or Financial Management Debtors"
+      ],
+      "status": "active",
+      "allow_others": true,
+      "sub_items": {
+        "flooding_report": {
+          "name": "Flooding Report",
+          "triggers": ["flooding", "flood", "water damage", "inundation"]
+        },
+        "drainage_issue": {
+          "name": "Drainage Issue",
+          "triggers": ["drainage", "blocked drain", "culvert", "stormwater"]
+        },
+        "sewer_overflow": {
+          "name": "Sewer Overflow",
+          "triggers": ["sewer overflow", "sewage", "sewer blockage"]
+        }
+      }
     },
     "junk": {
       "name": "Junk",
-      "description": "Marketing emails, newsletters, spam, automated notifications, vendor promotions, and other non-council-business correspondence",
+      "description": "Marketing emails, newsletters, spam, automated notifications",
       "triggers": [
-        "unsubscribe",
-        "newsletter",
-        "promotional",
-        "special offer",
-        "limited time",
-        "click here",
-        "view in browser",
-        "opt out",
-        "marketing",
-        "noreply",
-        "automated message",
-        "do not reply",
-        "delivery notification",
-        "read receipt",
-        "out of office",
-        "auto-reply",
-        "subscription",
-        "free trial",
-        "discount",
-        "webinar",
-        "demo request",
-        "vendor",
-        "sales team"
+        "unsubscribe", "newsletter", "promotional", "special offer",
+        "click here", "view in browser", "opt out", "marketing",
+        "noreply", "automated message", "do not reply"
       ],
       "exclusions": [
-        "If the email contains a genuine council service request, complaint, or application \u2192 route to the appropriate department",
-        "If the sender is a known council stakeholder or resident with a real issue \u2192 not junk"
-      ]
+        "If genuine council service request → route to appropriate department"
+      ],
+      "status": "active",
+      "allow_others": false,
+      "sub_items": {
+        "marketing_spam": {
+          "name": "Marketing/Spam",
+          "triggers": ["unsubscribe", "promotional", "special offer", "marketing"]
+        },
+        "automated_notification": {
+          "name": "Automated Notification",
+          "triggers": ["noreply", "automated", "do not reply", "system notification"]
+        }
+      }
     },
     "undetermined": {
       "name": "Undetermined",
-      "description": "Fallback when: (1) inference engine crashes or fails, (2) document details cannot be matched to any folder, (3) ambiguous routing after exclusion logic, (4) insufficient detail in message body",
+      "description": "Fallback when no folder rules are satisfied or confidence is below threshold",
       "triggers": [],
-      "exclusions": []
-    },
-    "development_application": {
-      "name": "Development Application",
-      "description": "AI Overview\nA Development Application (DA) on the NSW Planning Portal is\nan online, mandatory submission for obtaining approval to carry out building, subdivision, or land use changes. It acts as the central digital platform for lodging, paying fees, and tracking progress, replacing paper submissions. \nKey Usage Examples of DA in the NSW Portal\n\n    Lodging New Projects: Submitting applications for building 1 or 2-storey homes, renovations, or granny flats.\n    Site Analysis: Utilizing the Spatial Viewer to check zoning, flood, bushfire, or heritage constraints.\n    Tracking Status: Monitoring real-time status of applications from lodgement to determination via the Application Tracker.\n    Document Uploads: Submitting essential documents like Statement of Environmental Effects, cost reports, and owner\u2019s consent.\n    Public Submissions: Viewing and commenting on State Significant Applications currently on exhibition",
-      "triggers": [
-        "development application",
-        "DA lodgement",
-        "planning portal",
-        "building approval",
-        "subdivision application",
-        "land use change",
-        "Statement of Environmental Effects",
-        "SEE document",
-        "cost report",
-        "owner's consent",
-        "Application Tracker",
-        "spatial viewer",
-        "zoning check",
-        "flood constraints",
-        "bushfire constraints",
-        "heritage constraints",
-        "granny flat application",
-        "renovation approval",
-        "State Significant Application",
-        "public submission"
-      ],
-      "exclusions": [
-        "If email mentions 'building certificate' or 'construction certification' \u2192 Building Certificates folder (separate from planning)",
-        "If email is about 'strata management' or 'owners corporation meeting' \u2192 Strata Management folder",
-        "If email discusses 'planning permit appeal' without mentioning NSW Planning Portal \u2192 Appeals & Tribunals folder"
-      ],
-      "status": "draft"
+      "exclusions": [],
+      "status": "active",
+      "allow_others": true,
+      "sub_items": {}
     }
   },
   "global_rules": {
     "mail_out_report_attached": "Always returns Undetermined",
-    "attachment_dependency": "If attachments must be opened to understand the issue and message body lacks sufficient info \u2192 Undetermined",
-    "multi_folder_ambiguity": "If multiple folders seem plausible after exclusion logic \u2192 Undetermined",
-    "inference_failure": "If the inference engine crashes, times out, or returns an error \u2192 Undetermined"
+    "attachment_dependency": "If attachments must be opened and message body lacks info → Undetermined",
+    "multi_folder_ambiguity": "If multiple folders match after exclusion logic → Undetermined",
+    "inference_failure": "If inference engine crashes or times out → Undetermined"
   }
 }

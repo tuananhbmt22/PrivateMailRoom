@@ -1,0 +1,25 @@
+{
+  "sub_item_id": "barking_complaint",
+  "folder_key": "companion_animals",
+  "name": "Barking Complaint",
+  "description": "Complaint about a barking or noisy dog",
+  "checks": [
+    "Is the address of the barking dog provided?",
+    "How long has the issue been occurring?",
+    "Has the complainant spoken to the dog owner?"
+  ],
+  "outcomes": {
+    "formal_complaint": "Sufficient detail for formal investigation",
+    "mediation_suggested": "Recommend neighbour mediation first",
+    "insufficient_detail": "Need more information to investigate"
+  },
+  "metadata_fields": {
+    "complaint_address": "Address of the barking dog",
+    "duration": "How long the issue has been occurring"
+  },
+  "response_templates": {
+    "formal_complaint": "Thank you for your barking complaint regarding {complaint_address}. A Council Ranger will investigate within 14-21 days.",
+    "mediation_suggested": "We recommend speaking with your neighbour first. If the issue persists, please lodge a formal complaint.",
+    "insufficient_detail": "To investigate, we need: {missing_items}."
+  }
+}

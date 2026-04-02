@@ -1,0 +1,32 @@
+{
+  "sub_item_id": "parking_appeal",
+  "folder_key": "regulation_of_parking",
+  "name": "Parking Fine Appeal",
+  "description": "Sender is disputing a parking fine or infringement notice",
+  "checks": [
+    "Is a fine or infringement number referenced?",
+    "Is evidence provided (photos, witness statements)?",
+    "What grounds are cited? (signage obscured, medical emergency, permit displayed, wrong vehicle, time dispute)",
+    "Does the evidence support the claimed grounds?"
+  ],
+  "outcomes": {
+    "valid_appeal": "Evidence supports the appeal, grounds are legitimate",
+    "needs_evidence": "Appeal filed but missing required evidence or fine number",
+    "needs_review": "Complex case requiring human review (conflicting evidence, edge case)",
+    "rejected": "No valid grounds for appeal based on information provided"
+  },
+  "metadata_fields": {
+    "fine_number": "Infringement notice number",
+    "plate_number": "Vehicle registration plate",
+    "violation_date": "Date of the alleged violation",
+    "location": "Street address or intersection",
+    "appeal_grounds": "Stated reason for appeal",
+    "has_evidence": "Whether evidence was provided (true/false)"
+  },
+  "response_templates": {
+    "valid_appeal": "Thank you for your correspondence regarding infringement notice {fine_number}. We have reviewed the evidence you provided regarding the violation at {location} on {violation_date}. Your appeal has been forwarded to our Parking Review Panel for assessment. You will receive a written determination within 21 business days.",
+    "needs_evidence": "Thank you for your correspondence regarding infringement notice {fine_number}. To process your appeal, we require the following additional information: {missing_items}. Please provide this within 14 business days.",
+    "needs_review": "Thank you for your correspondence regarding infringement notice {fine_number}. Your case has been flagged for detailed review by our Parking Review Panel. A senior officer will contact you within 10 business days.",
+    "rejected": "Thank you for your correspondence regarding infringement notice {fine_number}. After reviewing the details provided, we are unable to identify grounds for waiving this infringement. Payment is due within 28 days."
+  }
+}

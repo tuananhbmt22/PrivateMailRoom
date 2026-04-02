@@ -1,0 +1,23 @@
+{
+  "sub_item_id": "missed_collection",
+  "folder_key": "waste_management_operations",
+  "name": "Missed Collection",
+  "description": "Bin was not emptied on collection day",
+  "checks": [
+    "Is the address provided?",
+    "Which bin type was missed (general, recycling, green)?",
+    "Was the bin placed out correctly and on time?"
+  ],
+  "outcomes": {
+    "rebook_collection": "Valid missed collection, rebook pickup",
+    "user_error": "Bin was not placed out correctly or on time"
+  },
+  "metadata_fields": {
+    "address": "Collection address",
+    "bin_type": "general, recycling, or green waste"
+  },
+  "response_templates": {
+    "rebook_collection": "Thank you for reporting the missed collection at {address}. A return pickup has been arranged.",
+    "user_error": "Please ensure your bin is placed at the kerb by 6am on collection day with the lid closed."
+  }
+}

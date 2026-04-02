@@ -97,7 +97,7 @@ class LocalLLM:
             payload["response_format"] = {
                 "type": "json_schema",
                 "json_schema": {
-                    "name": "classification_result",
+                    "name": "classification_result_v2",
                     "strict": True,
                     "schema": {
                         "type": "object",
@@ -105,8 +105,13 @@ class LocalLLM:
                             "event_id": {"type": "string"},
                             "file_count": {"type": "integer"},
                             "outcome": {"type": "string"},
+                            "sub_item_id": {"type": ["string", "null"]},
+                            "sub_item_name": {"type": ["string", "null"]},
                             "confidence": {"type": "number"},
+                            "sub_item_confidence": {"type": "number"},
                             "reasoning": {"type": "string"},
+                            "display_title": {"type": "string"},
+                            "display_title_redacted": {"type": "string"},
                             "linked_files": {
                                 "type": "array",
                                 "items": {"type": "string"},
@@ -116,8 +121,13 @@ class LocalLLM:
                             "event_id",
                             "file_count",
                             "outcome",
+                            "sub_item_id",
+                            "sub_item_name",
                             "confidence",
+                            "sub_item_confidence",
                             "reasoning",
+                            "display_title",
+                            "display_title_redacted",
                             "linked_files",
                         ],
                         "additionalProperties": False,
@@ -144,13 +154,41 @@ class LocalLLM:
                 )
 
             body = response.json()
-            content = body["choices"][0]["message"]["content"]
+            message = body["choices"][0]["message"]
+            content = message.get("content") or ""
+
+            # Some models (e.g., Qwen 9B) put the response in reasoning_content
+            if not content.strip() and message.get("reasoning_content"):
+                reasoning = message["reasoning_content"]
+                # Try to find JSON in the reasoning content
+                # First check if there's a complete JSON object
+                import re as _re
+                json_match = _re.search(r'\{[^{}]*"outcome"[^{}]*\}', reasoning)
+                if json_match:
+                    content = json_match.group(0)
+                else:
+                    # Use the full reasoning as content — the parser will try to extract JSON
+                    content = reasoning
+
+            # Also check: content exists but reasoning_content has the actual JSON
+            if content.strip() and message.get("reasoning_content"):
+                reasoning = message["reasoning_content"]
+                # If content has no JSON but reasoning does, prefer reasoning
+                if '{' not in content and '{' in reasoning:
+                    content = reasoning
+
             tokens_used = body.get("usage", {}).get("total_tokens", 0)
 
+            # Log truncation warning
+            finish_reason = body["choices"][0].get("finish_reason", "")
+            if finish_reason == "length":
+                logger.warning("LLM response truncated (hit token limit) — may be incomplete")
+
             logger.info(
-                "LLM inference completed in %.0fms, %d tokens",
+                "LLM inference completed in %.0fms, %d tokens (finish: %s)",
                 latency_ms,
                 tokens_used,
+                finish_reason,
             )
 
             return LLMResponse(

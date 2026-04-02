@@ -1,0 +1,20 @@
+{
+  "sub_item_id": "_default",
+  "folder_key": "companion_animals",
+  "name": "Companion Animals — General",
+  "description": "Default skill for companion animal events that don't match a specific sub-item",
+  "checks": [
+    "What type of animal is involved?",
+    "What is the sender requesting?"
+  ],
+  "outcomes": {
+    "general_enquiry": "General companion animal enquiry"
+  },
+  "metadata_fields": {
+    "animal_type": "dog or cat",
+    "request_summary": "Brief summary"
+  },
+  "response_templates": {
+    "general_enquiry": "Thank you for your enquiry about companion animal services. Please visit our website or contact our team."
+  }
+}

@@ -1,17 +1,12 @@
-# LLM Configuration
-# This file defines the local model endpoint and parameters.
-# Air-gapped: this URL must be a local network address only.
-
-endpoint: "http://192.168.222.1:1234"
-model: "medina-qwen3.5-27b-openclaw"
-
-# API format: OpenAI-compatible /v1/chat/completions
-api_path: "/v1/chat/completions"
-
-# Inference parameters
+endpoint: http://192.168.222.1:1234
+model: qwen/qwen3.5-9b
+models:
+- id: medina-qwen3.5-27b-openclaw
+  name: Qwen 3.5 27B (Medina)
+- id: qwen/qwen3.5-9b
+  name: Qwen 3.5 9B
+api_path: /v1/chat/completions
 temperature: 0.0
 max_tokens: 1024
 timeout_seconds: 300
-
-# Response format
-response_format: "json"
+response_format: json
